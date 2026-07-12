@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GARA - Arena Ujian</title>
+
+    <!-- External Libs -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+
+    <!-- Design System Global -->
+    <link rel="stylesheet" href="assets/root.css?v=2.5">
+    <link rel="icon" href="img\GARA_ICON.svg" type="image/png">
+    <!-- ⚠️ STRATEGI CSS TERPISAH -->
+    <link rel="stylesheet" href="assets/exam.css?v=2.7" media="(max-width: 768px)">
+    <link rel="stylesheet" href="assets/ujian.css?v=2.7" media="(min-width: 769px)">
+    <link rel="stylesheet" href="assets/css/camera.css">
+
+</head>
+
+<body class="ready">
+
+    <!-- ========================================== -->
+    <!-- LAYER 0: NETWORK STATUS BANNER             -->
+    <!-- ========================================== -->
+    <div id="offlineBanner" class="offline-banner hidden">
+        <div class="banner-content">
+            <i class="fas fa-wifi-slash"></i>
+            <span>KONEKSI PUTUS! SEGERA SAMBUNGKAN LAGI KE INTERNET!.</span>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- LAYER 1: CUSTOM LOADING SCREEN (IMPROVED)  -->
+    <!-- ========================================== -->
+    <div id="loadingOverlay" class="overlay-screen skeleton-mode">
+        <!-- Skeleton Header -->
+        <div class="skeleton-header">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div class="skeleton" style="width: 120px; height: 16px;"></div> <!-- Timer placeholder -->
+                <div class="skeleton" style="width: 80px; height: 16px;"></div> <!-- User placeholder -->
+            </div>
+            <div class="skeleton" style="width: 100%; height: 32px; border-radius: 8px;"></div>
+            <!-- Nav Button placeholder -->
+        </div>
+
+        <!-- Skeleton Body -->
+        <div class="skeleton-body">
+            <!-- Question Badge -->
+            <div class="skeleton" style="width: 100px; height: 24px; margin-bottom: 1rem; border-radius:16px;"></div>
+
+            <!-- Question Box -->
+            <div class="skeleton-q-box">
+                <div class="skeleton" style="width: 90%; height: 16px; margin-bottom: 0.5rem;"></div>
+                <div class="skeleton" style="width: 95%; height: 16px; margin-bottom: 0.5rem;"></div>
+                <div class="skeleton" style="width: 80%; height: 16px; margin-bottom: 1rem;"></div>
+                <div class="skeleton" style="width: 100%; height: 150px; border-radius: 8px;"></div>
+                <!-- Image placeholder -->
+            </div>
+
+            <!-- Options -->
+            <div class="skeleton-opt-box">
+                <div class="skeleton" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+                <div class="skeleton" style="width: 70%; height: 16px;"></div>
+            </div>
+            <div class="skeleton-opt-box">
+                <div class="skeleton" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+                <div class="skeleton" style="width: 60%; height: 16px;"></div>
+            </div>
+            <div class="skeleton-opt-box">
+                <div class="skeleton" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+                <div class="skeleton" style="width: 80%; height: 16px;"></div>
+            </div>
+            <div class="skeleton-opt-box">
+                <div class="skeleton" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+                <div class="skeleton" style="width: 50%; height: 16px;"></div>
+            </div>
+        </div>
+
+        <!-- Skeleton Footer -->
+        <div class="skeleton-footer">
+            <div class="skeleton" style="width: 100%; height: 36px; border-radius: 6px;"></div>
+            <div class="skeleton" style="width: 100%; height: 36px; border-radius: 6px;"></div>
+            <div class="skeleton" style="width: 100%; height: 36px; border-radius: 6px;"></div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- LAYER 2: GATEWAY / FULLSCREEN REQUEST      -->
+    <!-- ========================================== -->
+    <div id="gatewayOverlay" class="overlay-screen hidden">
+        <div class="gateway-card">
+            <div class="gateway-icon">
+                <img src="img\3dlogo.svg" alt="Gateway Icon">
+            </div>
+            <h2>Mulai Ujian</h2>
+            <button id="btnEnterFullscreen" class="btn-gateway">
+                Mulai Ujian Sekarang <i class="fas fa-arrow-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- LAYER 3: ARENA UJIAN (UTAMA)               -->
+    <!-- ========================================== -->
+    <div id="mainExamContainer" class="hidden">
+
+        <!-- HEADER: BRANDING UPDATE -->
+        <header class="exam-header">
+            <div class="header-left">
+                <!-- BRAND IDENTITY (Logo + Text) -->
+                <div class="brand-identity">
+                    <!-- Menggunakan SVG Logo sesuai instruksi -->
+                    <img src="img\GARA_WHITE.svg" alt="GARA Logo" class="header-logo"
+                        onerror="this.style.display='none'; this.nextElementSibling.style.marginLeft='0';">
+
+                    <div class="title-group">
+                        <h1 class="brand-title">Ruang Ujian</h1>
+                        <span class="academy-name">Garuda Akademi</span>
+                    </div>
+                </div>
+
+                <!-- Sidebar Toggle (New) -->
+                <button id="btnToggleSidebar" class="btn-icon-toggle desktop-only" title="Tutup/Buka Navigasi Soal">
+                    <i class="fas fa-bars"></i>
+                </button>
+
+                <!-- Divider Vertical (Desktop) -->
+                <div class="header-divider desktop-only"></div>
+
+                <!-- Mapel Info -->
+                <div class="exam-info">
+                    <span id="mapelName" class="mapel-badge">Memuat Mapel...</span>
+                </div>
+            </div>
+
+            <!-- Mobile Trigger -->
+            <div class="header-center mobile-only">
+                <button id="btnOpenSoalMobile" class="btn-text-icon">
+                    <i class="fas fa-th-large"></i> <span>Daftar Soal</span>
+                </button>
+            </div>
+
+            <div class="header-right">
+                <div class="timer-box">
+                    <i class="fas fa-stopwatch"></i>
+                    <span id="timerDisplay">--:--:--</span>
+                </div>
+                <div class="user-profile desktop-only">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="userName">Peserta</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN LAYOUT GRID -->
+        <main class="exam-layout">
+
+            <!-- SIDEBAR: Navigasi Soal (Desktop Only) -->
+            <aside class="exam-sidebar desktop-only">
+                <div class="sidebar-header">
+                    NAVIGASI SOAL
+                </div>
+                <div class="sidebar-content">
+                    <div class="nav-grid-container" id="sidebarNavGrid"></div>
+                </div>
+                <div class="sidebar-footer">
+                    <div class="legend-item"><span class="dot green"></span> Dijawab</div>
+                    <div class="legend-item"><span class="dot yellow"></span> Ragu</div>
+                    <div class="legend-item"><span class="dot gray"></span> Kosong</div>
+                </div>
+            </aside>
+
+            <!-- QUESTION AREA -->
+            <section class="question-area">
+                <div class="question-header">
+                    <div class="q-number-badge">
+                        Soal No. <span id="displayNoSoal">1</span>
+                    </div>
+                    <div class="font-controls desktop-only">
+                        <button class="btn-font sm">A</button>
+                        <button class="btn-font md">A</button>
+                        <button class="btn-font lg">A</button>
+                    </div>
+                </div>
+
+                <div class="question-scroll-area">
+                    <div id="questionImageContainer" class="q-image-area hidden"></div>
+                    <div id="questionText" class="q-text"></div>
+                    <div id="optionsContainer" class="q-options"></div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- FOOTER NAVIGASI -->
+        <footer class="exam-footer">
+            <button id="btnPrev" class="nav-btn secondary">
+                <i class="fas fa-chevron-left"></i> <span class="btn-label">Sebelumnya</span>
+            </button>
+
+            <div class="ragu-checkbox-wrapper">
+                <input type="checkbox" id="checkRagu" class="ragu-input">
+                <label for="checkRagu" class="ragu-label-box">
+                    <span class="check-icon"><i class="fas fa-check"></i></span>
+                    <span>Ragu</span>
+                </label>
+            </div>
+
+            <button id="btnNext" class="nav-btn primary">
+                <span class="btn-label">Selanjutnya</span> <i class="fas fa-chevron-right"></i>
+            </button>
+
+            <button id="btnSubmit" class="nav-btn success hidden">
+                <span class="btn-label">Selesai Ujian</span> <i class="fas fa-flag-checkered"></i>
+            </button>
+        </footer>
+    </div>
+
+    <!-- MODAL CUSTOM: DAFTAR SOAL (Mobile) -->
+    <div id="modalDaftarSoal" class="custom-modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Daftar Soal</h3>
+                <button id="btnCloseModalSoal" class="btn-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="nav-grid-container" id="mobileNavGrid"></div>
+            </div>
+            <div class="modal-footer-legend">
+                <div class="legend-item"><span class="dot green"></span> Jawab</div>
+                <div class="legend-item"><span class="dot yellow"></span> Ragu</div>
+                <div class="legend-item"><span class="dot gray"></span> BelUm</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- FASE 1: TEMPLATES (ENGINEERING UPGRADE)    -->
+    <!-- Digunakan oleh JS untuk clone, bukan string -->
+    <!-- ========================================== -->
+
+    <!-- 1. Template: Pilihan Ganda (Single Choice) -->
+    <template id="tpl-pg-biasa">
+        <div class="option-card">
+            <div class="opt-label">A</div>
+            <div class="opt-text">Isi Opsi</div>
+        </div>
+    </template>
+
+    <!-- 2. Template: PG Kompleks (Multiple Choice) -->
+    <template id="tpl-pg-kompleks">
+        <div class="option-card" style="cursor: pointer;">
+            <div class="opt-label" style="background:none; border:none; color:inherit; font-size:1.2rem;">
+                <i class="far fa-square checkbox-icon"></i>
+            </div>
+            <div class="opt-text">Isi Opsi Kompleks</div>
+        </div>
+    </template>
+
+    <!-- 3. Template: Benar Salah (Row Style) -->
+    <template id="tpl-benar-salah-container">
+        <div class="bs-container" style="display: flex; flex-direction: column; gap: 16px;"></div>
+    </template>
+
+    <template id="tpl-benar-salah-item">
+        <div class="bs-card-item"
+            style="background: #ffffff; border: 1px solid var(--color-border); border-radius: 12px; padding: 16px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); transition: transform 0.2s;">
+            <div class="bs-statement"
+                style="margin-bottom: 12px; font-size: 0.95rem; line-height: 1.5; color: var(--color-text-main);">
+                <!-- Statement text injected here -->
+            </div>
+            <div class="bs-options" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <!-- Tombol BENAR -->
+                <label class="btn-bs-benar"
+                    style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; border: 2px solid #e2e8f0; background: #f8fafc; color: #64748b; font-weight: 500; border-radius: 8px; cursor: pointer; transition: all 0.2s; user-select: none;">
+                    <input type="radio" value="BENAR" style="display:none">
+                    <i class="fas fa-check"></i> <span>BENAR</span>
+                </label>
+                <!-- Tombol SALAH -->
+                <label class="btn-bs-salah"
+                    style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; border: 2px solid #e2e8f0; background: #f8fafc; color: #64748b; font-weight: 500; border-radius: 8px; cursor: pointer; transition: all 0.2s; user-select: none;">
+                    <input type="radio" value="SALAH" style="display:none">
+                    <i class="fas fa-times"></i> <span>SALAH</span>
+                </label>
+            </div>
+        </div>
+    </template>
+
+    <!-- 4. Template: Isian (Input Angka) -->
+    <template id="tpl-isian">
+        <div class="isian-container">
+            <label class="isian-label">Jawaban Kamu (Angka):</label>
+            <input type="number" class="isian-input" placeholder="Ketik angka di sini...">
+        </div>
+    </template>
+
+    <!-- 5. Template: Navigasi Item -->
+    <template id="tpl-nav-item">
+        <div class="nav-item-box">1</div>
+    </template>
+
+    <audio id="violationAudio" src="pelanggaran.mp3" preload="auto"></audio>
+
+    <!-- CAMERA OVERLAY MODULE -->
+    <div id="cameraModule" class="camera-module hidden">
+        <div class="camera-header" id="cameraHeader">
+            <span>Kamera</span>
+            <button class="btn-cam-minimize"><i class="fas fa-minus"></i></button>
+        </div>
+        <div class="camera-content">
+            <video id="userCamera" autoplay muted playsinline></video>
+            <div id="cameraStatus" class="camera-status">
+                <p>Memuat Kamera...</p>
+                <button id="btnRequestPermission" class="btn-permission hidden">Izinkan Akses</button>
+            </div>
+        </div>
+        <div class="camera-resizer"></div>
+    </div>
+    <button id="btnShowCameraFloat" class="btn-float-camera hidden"><i class="fas fa-video"></i></button>
+
+    <!-- SCRIPTS -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="assets/timer.js"></script>
+    <script src="js/google-apps.js"></script>
+    <script src="js/memory.js"></script>
+    <script src="js/protect.js"></script>
+    <script type="module" src="js/main.js?v=2.1"></script>
+    <script src="assets/js/camera.js"></script>
+
+    <!-- Network Monitor (Global Offline Detection) -->
+    <script src="js/network-monitor.js"></script>
+</body>
+
+</html>

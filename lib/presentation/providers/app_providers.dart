@@ -13,6 +13,7 @@ import 'package:ibnutify/services/audio_handler.dart';
 import 'package:ibnutify/services/album_art_service.dart';
 import 'package:ibnutify/services/ml_service.dart';
 import 'package:ibnutify/services/download_service.dart';
+import 'package:ibnutify/services/smart_shuffle_service.dart';
 
 // ─── Infrastructure Providers ─────────────────────────────────────────────
 
@@ -141,6 +142,8 @@ final songsProvider =
     AsyncNotifierProvider<SongsNotifier, List<SongModel>>(SongsNotifier.new);
 
 // ─── Player State ──────────────────────────────────────────────────────────
+
+final isVideoModeProvider = StateProvider<bool>((ref) => false);
 
 enum RepeatMode { off, one, all }
 
@@ -375,6 +378,20 @@ class PlayerNotifier extends Notifier<PlayerState> {
   Future<void> toggleShuffle() async {
     final handler = ref.read(audioHandlerProvider);
     final newShuffle = !state.isShuffle;
+    
+    if (newShuffle && state.queue.isNotEmpty) {
+      final repo = ref.read(musicRepositoryProvider);
+      final recentLogs = await repo.getListeningHistory24h();
+      
+      final newIndices = await SmartShuffleService.computeSmartShuffleIndices(
+        state.queue,
+        recentLogs,
+        state.currentSong?.id,
+      );
+      
+      await handler.updateShuffleIndices(newIndices);
+    }
+
     await handler.setShuffleMode(
       newShuffle
           ? AudioServiceShuffleMode.all
@@ -589,9 +606,9 @@ class AIChatNotifier extends Notifier<AIChatState> {
         const AIChatMessage(
           role: ChatRole.ai,
           content:
-              'Halo! Saya IbnuTify AI 🎵\n'
+              'Halo! Saya IbnuTify AI.\n'
               'Ceritakan mood kamu atau lagu seperti apa yang kamu butuhkan sekarang?\n'
-              'Contoh: "Lagi stres ngoding, butuh lagu yang menenangkan" 💆',
+              'Contoh: "Lagi stres ngoding, butuh lagu yang menenangkan."',
         ),
       ],
     );
@@ -643,8 +660,8 @@ class AIChatNotifier extends Notifier<AIChatState> {
     final confirmMsg = AIChatMessage(
       role: ChatRole.ai,
       content:
-          '✅ Playlist "$name" berhasil dibuat dengan ${songs.length} lagu!\n'
-          'Cek di tab Library ya 🎉',
+          'Playlist "$name" berhasil dibuat dengan ${songs.length} lagu!\n'
+          'Cek di tab Library ya.',
     );
     state = state.copyWith(
       messages: [...state.messages, confirmMsg],
@@ -927,11 +944,11 @@ class DownloadNotifier extends Notifier<DownloadState> {
   /// User menekan chip "Download Music" — masuk mode menunggu URL.
   void requestUrl() {
     final botMsg = DownloadChatMessage(
-      content: '🎵 **Download Music**\n\n'
+      content: '**Download Music**\n\n'
           'Oke! Paste link Spotify kamu di sini ya.\n'
-          'Contoh format yang didukung:\n'
-          '• `https://open.spotify.com/track/...`\n\n'
-          '📁 Lagu akan disimpan di folder:\n'
+          'Format yang didukung:\n'
+          '`https://open.spotify.com/track/...`\n\n'
+          'Lagu akan disimpan di:\n'
           '`Download/Ibnutify/`',
     );
     state = state.copyWith(
@@ -943,18 +960,16 @@ class DownloadNotifier extends Notifier<DownloadState> {
   /// User mengirim teks saat mode awaitingUrl — langsung proses sebagai URL.
   Future<void> handleUserInput(String input) async {
     if (!DownloadService.isSpotifyTrackUrl(input)) {
-      // Bukan URL Spotify yang valid
       final errMsg = DownloadChatMessage(
-        content: '❌ URL tidak valid.\n\nMasukkan link Spotify track yang benar.\n'
+        content: '**URL tidak valid.**\n\nMasukkan link Spotify track yang benar.\n'
             'Contoh: `https://open.spotify.com/track/6xrP29Jvv...`',
       );
       state = state.copyWith(messages: [...state.messages, errMsg]);
       return;
     }
 
-    // Tampilkan "mengambil metadata..."
     final fetchingMsg = DownloadChatMessage(
-      content: '🔍 Mengambil informasi lagu dari Spotify...',
+      content: 'Mencari informasi lagu dari Spotify...',
     );
     state = state.copyWith(
       awaitingUrl: false,
@@ -967,23 +982,22 @@ class DownloadNotifier extends Notifier<DownloadState> {
 
     if (meta != null) {
       final previewMsg = DownloadChatMessage(
-        content: '🎶 **${meta.title}**\n'
+        content: '**${meta.title}**\n'
             'Artist: ${meta.artist}\n'
             'Album: ${meta.album}${meta.year.isNotEmpty ? ' (${meta.year})' : ''}'
             '${meta.genre.isNotEmpty ? '\nGenre: ${meta.genre}' : ''}\n\n'
-            '⬇️ Memulai proses unduhan...',
+            'Memulai proses unduhan...',
       );
       state = state.copyWith(messages: [...state.messages, previewMsg]);
     } else {
       final startMsg = DownloadChatMessage(
-        content: '⬇️ Memulai unduhan...',
+        content: 'Memulai unduhan...',
       );
       state = state.copyWith(messages: [...state.messages, startMsg]);
     }
 
-    // Tambah progress bubble (akan di-update secara periodik)
     final progressMsg = DownloadChatMessage(
-      content: '⏳ Menghubungi YouTube...',
+      content: 'Menghubungi YouTube...',
       isProgress: true,
       progress: const DownloadProgress(),
     );
@@ -996,6 +1010,11 @@ class DownloadNotifier extends Notifier<DownloadState> {
     final result = await service.downloadTrack(input);
     _stopPolling();
 
+    // Trigger local scan if successfully downloaded new song
+    if (result.success && result.status != 'skipped') {
+      ref.read(songsProvider.notifier).scanDeviceSongs();
+    }
+
     // Update pesan progress terakhir menjadi hasil akhir
     final updatedMsgs = List<DownloadChatMessage>.from(state.messages);
     if (updatedMsgs.isNotEmpty && updatedMsgs.last.isProgress) {
@@ -1006,22 +1025,22 @@ class DownloadNotifier extends Notifier<DownloadState> {
     if (result.success) {
       if (result.status == 'skipped') {
         resultMsg = DownloadChatMessage(
-          content: '✅ **Lagu sudah ada!**\n\n'
+          content: '**Lagu sudah ada!**\n\n'
               '`${result.title}` sudah tersimpan di folder Download/Ibnutify.\n'
-              'Skip unduhan.',
+              'Download dilewati.',
         );
       } else {
         resultMsg = DownloadChatMessage(
-          content: '✅ **Unduhan selesai!** 🎉\n\n'
-              '🎵 ${result.title}\n'
-              '👤 ${result.artist}\n'
-              '💿 ${result.album}\n\n'
-              '📁 Tersimpan di: `Download/Ibnutify/`',
+          content: '**Unduhan selesai!**\n\n'
+              'Judul: ${result.title}\n'
+              'Artist: ${result.artist}\n'
+              'Album: ${result.album}\n\n'
+              'Tersimpan di: `Download/Ibnutify/`',
         );
       }
     } else {
       resultMsg = DownloadChatMessage(
-        content: '❌ **Unduhan gagal**\n\n${result.error}\n\n'
+        content: '**Unduhan gagal**\n\n${result.error}\n\n'
             'Coba lagi dengan link Spotify yang berbeda.',
       );
     }
@@ -1065,24 +1084,24 @@ class DownloadNotifier extends Notifier<DownloadState> {
   String _buildProgressText(DownloadProgress p) {
     switch (p.status) {
       case DownloadStatus.fetchingMetadata:
-        return '🔍 Mengambil data dari Spotify...';
+        return 'Mengambil data dari Spotify...';
       case DownloadStatus.downloading:
         final pct = p.percent.toStringAsFixed(1);
-        final eta = p.etaDisplay.isNotEmpty ? ' • ETA: ${p.etaDisplay}' : '';
-        final spd = p.speedStr.isNotEmpty ? ' • ${p.speedStr}' : '';
-        return '⬇️ Mengunduh... **$pct%**$eta$spd';
+        final eta = p.etaDisplay.isNotEmpty ? ' — ETA: ${p.etaDisplay}' : '';
+        final spd = p.speedStr.isNotEmpty ? ' — ${p.speedStr}' : '';
+        return 'Mengunduh... **$pct%**$eta$spd';
       case DownloadStatus.converting:
-        return '🔄 Mengkonversi ke MP3...';
+        return 'Mengkonversi ke format audio...';
       case DownloadStatus.tagging:
-        return '🏷️ Menambahkan metadata & cover art...';
+        return 'Menambahkan metadata dan cover art...';
       case DownloadStatus.done:
-        return '✅ Selesai!';
+        return 'Selesai!';
       case DownloadStatus.skipped:
-        return '⏭️ Lagu sudah ada, skip.';
+        return 'Lagu sudah ada, download dilewati.';
       case DownloadStatus.error:
-        return '❌ Error: ${p.error}';
+        return '**Gagal:** ${p.error}';
       default:
-        return '⏳ Menghubungi YouTube...';
+        return 'Menghubungi YouTube...';
     }
   }
 

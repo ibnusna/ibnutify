@@ -234,6 +234,16 @@ class DownloadService {
     }
   }
 
+  /// Mengambil log debug python saat proses download.
+  Future<String> getDownloadLog() async {
+    try {
+      final raw = await _channel.invokeMethod<String>('getDownloadLog');
+      return raw ?? 'Tidak ada log.';
+    } catch (e) {
+      return 'Gagal mengambil log: $e';
+    }
+  }
+
   /// Validasi apakah string adalah Spotify track URL yang valid.
   static bool isSpotifyTrackUrl(String input) {
     return input.contains('open.spotify.com/track/') ||

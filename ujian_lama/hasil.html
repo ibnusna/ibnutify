@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Hasil Ujian - Ruang Ujian</title>
+
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="icon" href="img\GARA_ICON.svg" type="image/png">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+
+  <!-- Design System -->
+  <link rel="stylesheet" href="assets/root.css" />
+  <link rel="stylesheet" href="assets/header.css" />
+  <!-- ujian.css removed to prevent layout conflicts -->
+  <link rel="stylesheet" href="assets/hasil.css" /> <!-- Style khusus halaman hasil -->
+
+  <!-- SweetAlert2 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" />
+
+  <!-- MathJax -->
+  <script type="text/javascript" id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+    </script>
+</head>
+
+<body>
+
+  <div class="confirmation-layout">
+
+    <!-- Global Header -->
+    <header class="app-header">
+      <div class="header-container">
+        <img src="img\FARA_BLACK (1).svg" alt="Logo Kemendikbud" class="brand-logo">
+        <div class="brand-divider">
+          <h1 class="brand-title">
+            RUANG UJIAN<br>GARUDA AKADEMI
+          </h1>
+        </div>
+
+        <!-- Logout / Home Button -->
+        <a href="http://garudakademi.ct.ws/" class="header-logout-btn btn-kembali-beranda"
+          title="Kembali ke Halaman Utama">
+          <i class="fas fa-sign-out-alt"></i>
+        </a>
+      </div>
+    </header>
+
+    <!-- MAIN CONTENT WRAPPER -->
+    <div class="confirmation-card">
+      <div class="card-decor-top"></div>
+
+      <div class="card-body">
+
+        <!-- Icon & Title -->
+        <div class="result-icon-wrapper">
+          <img src="img\3dlogo.svg" alt="Logo" class="result-logo">
+        </div>
+        <div class="result-header">
+          <h1 class="result-title">Ujian Selesai!</h1>
+          <p class="result-subtitle">Terima kasih telah mengikuti ujian ini.</p>
+        </div>
+
+        <!-- Score Box -->
+        <div class="score-box">
+          <span class="score-label">Nilai Akhir Kamu</span>
+          <span id="nilaiAkhir" class="score-value">0</span>
+          <div id="kkmStatusBadge" class="kkm-badge-wrapper"></div>
+        </div>
+
+        <!-- Detail Peserta -->
+        <div class="info-group">
+          <div class="info-item">
+            <span class="info-label">Nama Lengkap</span>
+            <span id="hasilNama" class="info-value"><span class="skeleton"
+                style="width: 150px; height: 1em;"></span></span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Kelas / Ruang</span>
+            <span id="hasilKelas" class="info-value"><span class="skeleton"
+                style="width: 80px; height: 1em;"></span></span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Mata Ujian</span>
+            <span id="hasilMapel" class="info-value"><span class="skeleton"
+                style="width: 200px; height: 1em;"></span></span>
+          </div>
+        </div>
+
+        <!-- Ringkasan Benar/Salah -->
+        <div class="stats-grid">
+          <div class="stat-card correct">
+            <i class="fas fa-check-circle stat-icon"></i>
+            <span id="jawabanBenar" class="stat-number">0</span>
+            <span class="stat-label">Jawaban Benar</span>
+          </div>
+          <div class="stat-card wrong">
+            <i class="fas fa-times-circle stat-icon"></i>
+            <span id="jawabanSalah" class="stat-number">0</span>
+            <span class="stat-label">Jawaban Salah</span>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+          <button id="downloadBuktiBtn" class="btn-action btn-download">
+            <i class="fas fa-file-pdf"></i>
+            <span>Unduh Bukti Ujian</span>
+          </button>
+
+          <button id="selesaiBtn" class="btn-action btn-finish">
+            <span>Selesai & Keluar</span>
+            <i class="fas fa-sign-out-alt"></i>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ANALYSIS CARD (NEW) -->
+    <div id="analysisCard" class="confirmation-card analysis-card" style="display: none; margin-top: 2rem;">
+      <div class="card-body">
+        <div class="analysis-header">
+          <div class="analysis-icon">
+            <i class="fas fa-chart-pie"></i>
+          </div>
+          <div>
+            <h2 class="analysis-title">Analisis & Rekomendasi</h2>
+            <p class="analysis-subtitle">Evaluasi performa berdasarkan jawaban yang salah</p>
+          </div>
+        </div>
+
+        <div class="analysis-content">
+          <!-- Opening Statement -->
+          <div class="analysis-section">
+            <p id="analysisOpening" class="analysis-text-main"></p>
+          </div>
+
+          <!-- Weaknesses -->
+          <div id="wrapperWeaknesses" class="analysis-section" style="display: none;">
+            <h3 class="section-label text-red-600">
+              <i class="fas fa-exclamation-triangle mr-1"></i> Area Perlu Peningkatan
+            </h3>
+            <ul id="listWeaknesses" class="analysis-list warning-list"></ul>
+          </div>
+
+          <!-- Recommendations -->
+          <div id="wrapperRecommendations" class="analysis-section">
+            <h3 class="section-label text-blue-600">
+              <i class="fas fa-lightbulb mr-1"></i> Saran Belajar
+            </h3>
+            <ul id="listRecommendations" class="analysis-list info-list"></ul>
+          </div>
+
+          <!-- AI DEEP ANALYSIS (NEW) -->
+          <div id="aiDeepAnalysis" class="analysis-section" style="margin-top: 2.5rem; display: none;">
+            <!-- Content injected via JS -->
+          </div>
+
+          <!-- DETAILED ANALYSIS: BENAR (NEW) -->
+          <div id="wrapperBenar" class="analysis-section" style="display: none; margin-top: 2.5rem;">
+            <h3 class="section-label text-green-700 border-b pb-2 mb-4">
+              ANALISIS JAWABAN BENAR
+            </h3>
+            <div id="listSoalBenar" class="analysis-grid">
+              <!-- Items injected via JS -->
+            </div>
+          </div>
+
+          <!-- DETAILED ANALYSIS: SALAH (NEW) -->
+          <div id="wrapperSalah" class="analysis-section" style="display: none; margin-top: 2.5rem;">
+            <h3 class="section-label text-red-700 border-b pb-2 mb-4">
+              ANALISIS JAWABAN SALAH
+            </h3>
+            <div id="listSoalSalah" class="analysis-grid">
+              <!-- Items injected via JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================= -->
+  <!-- NEW: STATIC COMPONENTS FOR REFACTORING    -->
+  <!-- ========================================= -->
+
+  <!-- ANBK CUSTOM MODAL (Hidden by default) -->
+  <div id="anbkModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <!-- Header Biru ANBK -->
+      <div class="modal-header">
+        <h3 id="anbkModalTitle" class="modal-title">Konfirmasi</h3>
+        <button onclick="document.getElementById('anbkModal').style.display='none'" class="modal-close-btn">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body">
+        <div id="anbkModalIcon" class="modal-icon-wrapper">
+          <!-- Icon will be injected here -->
+          <i class="fas fa-exclamation-circle"></i>
+        </div>
+        <p id="anbkModalMessage" class="modal-message">Pesan disini</p>
+      </div>
+
+      <!-- Footer / Buttons -->
+      <div id="anbkModalButtons" class="modal-footer">
+        <!-- Buttons injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Library jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <!-- Scripts Logic -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="js/app.js"></script>
+  <script src="js/google-apps.js"></script>
+  <script src="js/bukti-ujian.js"></script>
+  <script type="module" src="js/main.js"></script>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const returnUrl = sessionStorage.getItem('exam_return_url');
+        if (returnUrl) {
+          document.querySelectorAll('.header-logout-btn, #selesaiBtn').forEach(btn => {
+            if(btn.tagName === 'A') btn.href = returnUrl;
+            else btn.onclick = function() { window.location.href = returnUrl; };
+          });
+        } else {
+            document.querySelectorAll('#selesaiBtn').forEach(btn => {
+                btn.onclick = function() { window.location.href = 'http://garudakademi.ct.ws/'; };
+            });
+        }
+      });
+    </script>
+</body>
+</html>

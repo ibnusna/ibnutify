@@ -1,0 +1,886 @@
+/* =========================================================
+   ASSETS/EXAM.CSS - REVISI FATAL FIX (FINAL V2)
+   Role: Mobile/Tablet Exam Interface
+   Target: Max-Width 768px
+   Focus: Modal Center, Footer Text Fit, Smooth Animations
+========================================================= */
+
+@import url('root.css');
+
+:root {
+  --header-height: 7.5rem;
+  --footer-height: 4.5rem;
+  /* Sedikit lebih tinggi untuk nampung teks */
+  --container-padding: var(--space-4);
+
+  --safe-top: env(safe-area-inset-top, 20px);
+  --safe-bottom: env(safe-area-inset-bottom, 20px);
+
+  /* Z-Index Hierarchy - PENTING agar Modal di paling atas */
+  --z-header: 50;
+  --z-footer: 100;
+  --z-modal: 9999;
+}
+
+/* =========================================
+   1. GLOBAL LAYOUT & RESET
+========================================= */
+/* =========================================
+   1. IMPROVED LOADING SPINNER
+======================================== */
+/* =========================================
+   1. IMPROVED LOADING SPINNER (SKELETON MODE)
+   ======================================== */
+/* Override Overlay for Skeleton Mode */
+.overlay-screen.skeleton-mode {
+  display: block;
+  /* Override flex center */
+  padding: 0;
+  background-color: var(--color-bg-body);
+  overflow: hidden;
+  z-index: var(--z-modal);
+}
+
+/* Skeleton Keyframes */
+@keyframes skeleton-animation {
+  0% {
+    background-position: -200px 0;
+  }
+
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+/* Base Skeleton Class */
+.skeleton {
+  background-color: #f1f5f9;
+  /* Slate-100 */
+  background-image: linear-gradient(90deg, #f1f5f9, #e2e8f0, #f1f5f9);
+  /* Slate-100 to Slate-200 */
+  background-size: 200px 100%;
+  background-repeat: no-repeat;
+  border-radius: 4px;
+  display: block;
+  line-height: 1;
+  width: 100%;
+  animation: skeleton-animation 1.5s ease-in-out infinite;
+}
+
+/* Skeleton Layout Helpers */
+.skeleton-header {
+  height: var(--header-height);
+  background: white;
+  border-bottom: 2px solid #f1f5f9;
+  padding: var(--safe-top) var(--container-padding) var(--space-2);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.skeleton-body {
+  padding: var(--space-4) var(--container-padding);
+}
+
+.skeleton-q-box {
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  border: 1px solid #e2e8f0;
+  margin-bottom: var(--space-4);
+}
+
+.skeleton-opt-box {
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  border: 1px solid #e2e8f0;
+  margin-bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.skeleton-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--footer-height) + var(--safe-bottom));
+  background: white;
+  border-top: 2px solid #e2e8f0;
+  padding: 0 var(--container-padding) var(--safe-bottom);
+  display: grid;
+  grid-template-columns: 1fr 1.3fr 1fr;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+body {
+  background-color: var(--color-bg-body);
+  color: var(--color-text-body);
+  font-family: var(--font-family-base);
+
+  /* Padding Body disesuaikan agar konten tidak tertutup */
+  padding-top: calc(var(--header-height) + var(--space-2));
+  padding-bottom: calc(var(--footer-height) + var(--safe-bottom) + 8rem);
+  /* Added extra space */
+
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+  line-height: 1.5;
+}
+
+/* Utilities Override */
+.hidden {
+  display: none !important;
+}
+
+.desktop-only {
+  display: none !important;
+}
+
+/* =========================================
+   2. OVERLAYS (Loading & Gateway)
+========================================= */
+
+.overlay-screen {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background-color: var(--color-surface);
+}
+
+.gara-spinner {
+  width: 3rem;
+  height: 3rem;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: var(--space-4);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.gateway-card {
+  width: 100%;
+  max-width: 340px;
+  background: var(--color-surface);
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+.gateway-icon {
+  font-size: 3rem;
+  color: var(--color-primary);
+  margin-bottom: var(--space-4);
+}
+
+.btn-gateway {
+  width: 100%;
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+  font-weight: var(--font-weight-bold);
+  padding: var(--space-3);
+  border-radius: var(--radius-full);
+  margin-top: var(--space-4);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+/* =========================================
+   3. EXAM HEADER
+========================================= */
+
+.exam-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--z-header);
+  height: var(--header-height);
+  background: var(--color-primary);
+  padding: var(--safe-top) var(--container-padding) var(--space-2);
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-2);
+
+  box-shadow: var(--shadow-md);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Row 1: User Profile & Timer */
+.header-right {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  order: 1;
+}
+
+/* Paksa User Profile Tampil */
+.user-profile.desktop-only {
+  display: flex !important;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-inverse);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--text-sm);
+  max-width: 60%;
+}
+
+.user-profile span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timer-box {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--color-text-inverse);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-family: monospace;
+  font-weight: var(--font-weight-bold);
+  font-size: var(--text-base);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Row 2: Tombol Daftar Soal */
+.header-center {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  order: 2;
+}
+
+.btn-text-icon {
+  width: 100%;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.1s;
+}
+
+.btn-text-icon:active {
+  transform: scale(0.97);
+  /* Efek tekan */
+}
+
+/* Sembunyikan yang tidak perlu */
+.header-left,
+.brand-logo,
+.exam-info {
+  display: none !important;
+}
+
+/* =========================================
+   4. QUESTION AREA
+========================================= */
+
+.exam-layout {
+  width: 100%;
+  max-width: 100%;
+  padding: 0 var(--container-padding);
+  margin: 0 auto;
+}
+
+.question-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* FIX: Ensure content is not hidden behind fixed footer on mobile */
+.question-scroll-area {
+  padding-bottom: 200px !important;
+  display: block;
+}
+
+.question-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.q-number-badge {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  border: 1px solid rgba(11, 87, 208, 0.2);
+}
+
+.q-number-badge span {
+  font-size: var(--text-lg);
+  margin-left: var(--space-1);
+}
+
+.q-text {
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  margin-bottom: var(--space-4);
+}
+
+.q-text img {
+  border-radius: var(--radius-md);
+  margin: var(--space-3) auto;
+  border: 1px solid var(--color-border);
+  max-width: 100%;
+  height: auto;
+}
+
+
+.q-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+}
+
+.option-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.option-card:active {
+  transform: scale(0.98);
+  /* Animasi tekan halus */
+  background-color: var(--color-bg-body);
+}
+
+.option-card.selected {
+  background-color: var(--color-primary-light);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.opt-label {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  background-color: var(--color-bg-body);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--text-sm);
+  transition: all 0.2s;
+}
+
+.option-card.selected .opt-label {
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+  border-color: var(--color-primary);
+}
+
+.opt-text {
+  align-self: center;
+  color: var(--color-text-body);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.option-card.selected .opt-text {
+  color: var(--color-primary-dark);
+  font-weight: var(--font-weight-medium);
+}
+
+/* =========================================
+   6. EXAM FOOTER (RESPONSIVE FIX)
+========================================= */
+
+.exam-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--footer-height) + var(--safe-bottom));
+  background-color: var(--color-surface);
+  border-top: 2px solid var(--color-border);
+  padding: 0 var(--container-padding) var(--safe-bottom);
+  z-index: var(--z-footer);
+
+  /* GRID LAYOUT YANG BENAR */
+  display: grid;
+  /* Kiri (30%) - Tengah (40%) - Kanan (30%) agar seimbang */
+  grid-template-columns: 1fr 1.3fr 1fr;
+  gap: var(--space-2);
+  align-items: center;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* Base Button Footer */
+.nav-btn {
+  height: 3rem;
+  display: flex;
+  flex-direction: column;
+  /* Icon di atas, Teks di bawah (hemat tempat) */
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  /* Jarak icon ke teks sangat rapat */
+  border-radius: var(--radius-md);
+  transition: all 0.15s ease;
+  border: none;
+  width: 100%;
+  padding: 0 4px;
+  /* Padding minimal */
+  overflow: hidden;
+}
+
+/* Animasi Tekan Tombol Footer */
+.nav-btn:active {
+  transform: scale(0.92);
+}
+
+.nav-btn i {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* Teks Tombol (Responsive - Tidak akan overflow) */
+.nav-btn .btn-label {
+  display: block !important;
+  /* WAJIB MUNCUL */
+  font-size: 0.65rem;
+  /* Font kecil tapi terbaca */
+  font-weight: 600;
+  white-space: nowrap;
+  /* Jangan turun baris */
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Prev Button Style */
+.nav-btn.secondary {
+  background-color: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+
+.nav-btn.secondary:active {
+  background-color: #f1f5f9;
+}
+
+/* Next Button Style */
+.nav-btn.primary {
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+  box-shadow: var(--shadow-sm);
+}
+
+.nav-btn.primary:active {
+  background-color: var(--color-primary-dark);
+}
+
+/* Submit Button Style */
+.nav-btn.success {
+  background-color: #16a34a;
+  color: white;
+}
+
+/* RAGU CHECKBOX (Tengah) */
+.ragu-checkbox-wrapper {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.ragu-input {
+  display: none;
+}
+
+.ragu-label-box {
+  width: 100%;
+  height: 3rem;
+  display: flex;
+  flex-direction: row;
+  /* Icon disamping teks */
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  background-color: #fffbeb;
+  color: var(--color-accent-text);
+  border: 2px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  font-size: 0.8rem;
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.ragu-label-box:active {
+  transform: scale(0.95);
+}
+
+.ragu-input:checked+.ragu-label-box {
+  background-color: var(--color-accent);
+  color: #000;
+  box-shadow: var(--shadow-sm);
+}
+
+/* =========================================
+   7. MODAL FIX (CENTER & BLUR)
+========================================= */
+
+.custom-modal {
+  /* POSISI FIXED PENUH LAYAR */
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  /* Fallback */
+  height: 100dvh;
+  /* Modern mobile */
+  z-index: var(--z-modal);
+
+  /* Flexbox Centering (Horizontal & Vertikal) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* Hilangkan visibility default jika hidden ada */
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+/* Backdrop dengan BLUR */
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  /* Gelap transparan */
+  backdrop-filter: blur(5px);
+  /* Efek kaca buram */
+  -webkit-backdrop-filter: blur(5px);
+}
+
+/* Modal Card Style & Animation */
+.modal-card {
+  position: relative;
+  /* Agar di atas backdrop */
+  width: 90%;
+  max-width: 360px;
+  max-height: 80vh;
+  background-color: var(--color-surface);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  /* Animasi Masuk: Scale Up + Fade In */
+  animation: modalPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes modalPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modal-header {
+  padding: var(--space-4);
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-main);
+}
+
+.btn-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  border: none;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: background 0.2s;
+}
+
+.btn-close:active {
+  background: #e2e8f0;
+}
+
+.modal-body {
+  padding: var(--space-4);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Grid Soal di Modal */
+.nav-grid-container {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-2);
+}
+
+.nav-item-box {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-body);
+  transition: transform 0.1s;
+}
+
+.nav-item-box:active {
+  transform: scale(0.9);
+}
+
+.nav-item-box.active {
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+  border-color: var(--color-primary);
+}
+
+.nav-item-box.done {
+  background-color: #16a34a;
+  color: white;
+  border-color: #16a34a;
+}
+
+.nav-item-box.ragu {
+  background-color: var(--color-accent);
+  color: black;
+  border-color: var(--color-accent);
+}
+
+.modal-footer-legend {
+  padding: var(--space-3);
+  background-color: #f8fafc;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: center;
+  gap: var(--space-4);
+  font-size: 0.75rem;
+  /* Font kecil */
+  color: var(--color-text-muted);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.dot.green {
+  background-color: #16a34a;
+}
+
+.dot.yellow {
+  background-color: var(--color-accent);
+}
+
+.dot.gray {
+  background-color: var(--color-border);
+}
+
+/* =========================================
+   8. TEMPLATE ISIAN (Input Style)
+========================================= */
+.isian-container {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  background-color: #f8fafc;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.isian-label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-main);
+}
+
+.isian-input {
+  width: 100%;
+  padding: var(--space-3);
+  font-size: var(--text-lg);
+  font-family: monospace;
+  color: var(--color-text-main);
+  background-color: white;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.isian-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(11, 87, 208, 0.2);
+}
+
+.isian-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* =========================================
+   9. IMAGE AREA FIX (MOBILE CARD STYLE)
+========================================= */
+.q-image-area {
+  width: 100%;
+  margin-bottom: var(--space-4);
+  background: white;
+  padding: var(--space-3);
+  /* Padding sedikit lebih kecil untuk mobile */
+  border-radius: var(--radius-lg);
+  border-left: 4px solid var(--color-primary);
+  /* Border Aksen */
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border);
+}
+
+.q-image-wrapper {
+  width: 100%;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background-color: transparent;
+  /* Clean bg */
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.q-image-wrapper img {
+  width: 100% !important;
+  height: auto !important;
+  max-width: 100% !important;
+  object-fit: contain !important;
+  display: block;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  image-rendering: -webkit-optimize-contrast;
+  /* Attempt to sharpen */
+}
+
+/* =========================================
+   10. OFFLINE BANNER (MOBILE SUPPORT)
+========================================= */
+.offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 10000;
+  background: #ef4444;
+  /* Red-500 */
+  color: white;
+  text-align: center;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  /* Sedikit lebih kecil untuk mobile */
+  font-weight: 600;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transform: translateY(0);
+  transition: transform 0.3s ease-in-out;
+}
+
+.offline-banner.hidden {
+  display: block !important;
+  /* Override .hidden display:none */
+  transform: translateY(-100%);
+}
+
+.banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1.2;
+}

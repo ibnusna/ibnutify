@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Konfirmasi Ujian - Aplikasi CBT</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #e5e7eb;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Mencegah scrolling halaman utama */
+        }
+        
+        /* Custom Scrollbar untuk kotak petunjuk jika teksnya panjang */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+
+        /* Mencegah teks diseleksi/dicopy (fitur keamanan ujian) */
+        .no-select {
+            user-select: none;
+            -webkit-user-select: none;
+            -ms-user-select: none;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col no-select">
+
+    <!-- Top Pink Notification Bar (Global) -->
+    <div class="bg-pink-300 text-[10px] text-gray-800 px-2 py-0.5 font-semibold tracking-wider z-50">
+        APLIKASI EXAM BROWSER MODA DARING
+    </div>
+
+    <!-- ========================================== -->
+    <!-- SCREEN 1: KONFIRMASI TES (Landing Page)  -->
+    <!-- ========================================== -->
+    <div class="flex flex-col h-full w-full bg-[#f0f4f8]">
+        
+        <!-- Header Blue -->
+        <header class="bg-[#0f4098] h-28 flex items-center justify-between px-8 text-white relative overflow-hidden shadow-md">
+            <!-- Left: Logo & Title -->
+            <div class="flex items-center gap-4 z-10">
+                <!-- Mock Logo using SVG -->
+                <div class="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-inner">
+                    <svg viewBox="0 0 24 24" class="w-8 h-8 text-[#0f4098]" fill="currentColor">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold tracking-wide">CBT SEKOLAH</h1>
+                    <p class="text-sm font-light text-blue-100">Computer Based Test Application</p>
+                </div>
+            </div>
+
+            <!-- Right: User Info -->
+            <div class="flex items-center gap-4 z-10">
+                <span class="text-sm font-medium">PESERTA UJIAN</span>
+                <div class="bg-[#1e58c0] p-2 rounded-md shadow-sm">
+                    <i class="fa-solid fa-graduation-cap text-xl"></i>
+                </div>
+            </div>
+            
+            <!-- Abstract background shape -->
+            <div class="absolute right-0 top-0 h-full w-1/3 bg-[#0d3885] transform -skew-x-12 translate-x-10 z-0"></div>
+        </header>
+
+        <!-- Main Content Box -->
+        <main class="flex-1 flex items-start justify-center pt-10 px-8 gap-6 relative">
+            <!-- Background split color simulation -->
+            <div class="absolute top-0 left-0 w-full h-1/4 bg-[#0f4098]"></div>
+
+            <!-- Left Card: Detail Data Siswa -->
+            <div class="bg-white rounded-lg shadow-xl w-[400px] p-8 z-10 h-[460px] border border-gray-100">
+                <h2 class="text-xl font-bold text-gray-800 text-center mb-8 border-b-2 border-blue-500 pb-2 inline-block w-full">Konfirmasi Data</h2>
+                
+                <div class="space-y-5">
+                    <div class="border-b border-gray-100 pb-2">
+                        <p class="text-xs text-gray-500 mb-1 uppercase tracking-wider font-semibold">Identitas Ujian</p>
+                        <p class="text-sm font-medium text-gray-800">Ujian Akhir Semester - Informatika & IPA</p>
+                    </div>
+                    <div class="border-b border-gray-100 pb-2">
+                        <p class="text-xs text-gray-500 mb-1 uppercase tracking-wider font-semibold">Nama Peserta</p>
+                        <p class="text-sm font-medium text-gray-800">Ahmad Budi Santoso</p>
+                    </div>
+                    <div class="border-b border-gray-100 pb-2">
+                        <p class="text-xs text-gray-500 mb-1 uppercase tracking-wider font-semibold">Kelas</p>
+                        <p class="text-sm font-medium text-gray-800">IX - A</p>
+                    </div>
+                    <div class="border-b border-gray-100 pb-2">
+                        <p class="text-xs text-gray-500 mb-1 uppercase tracking-wider font-semibold">NIS</p>
+                        <p class="text-sm font-medium text-gray-800">2023104509</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Card: Petunjuk & Peraturan -->
+            <div class="bg-white rounded-lg shadow-xl w-[600px] p-8 z-10 h-[460px] flex flex-col justify-between border border-gray-100">
+                <div class="flex-1 overflow-hidden flex flex-col">
+                    <h2 class="text-sm font-bold text-gray-800 text-center mb-4 tracking-widest uppercase border-b border-gray-200 pb-3">Petunjuk & Peraturan Ujian</h2>
+                    
+                    <!-- Scrollable area for instructions -->
+                    <div class="overflow-y-auto custom-scrollbar pr-2 flex-1 text-sm text-gray-700 leading-relaxed text-justify space-y-3">
+                        <p>
+                            Selamat datang di Aplikasi Ujian CBT. Subtes ini ditujukan untuk evaluasi capaian kompetensi siswa pada mata pelajaran <strong>Informatika dan Ilmu Pengetahuan Alam (IPA)</strong>.
+                        </p>
+                        <p class="font-semibold text-gray-800">Peraturan Tata Tertib Ujian:</p>
+                        <ul class="list-disc pl-5 space-y-2">
+                            <li>Berdoalah terlebih dahulu sebelum menekan tombol mulai.</li>
+                            <li><strong>Dilarang keras</strong> membuka tab baru, browser lain, atau aplikasi sekunder apa pun selama ujian berlangsung. Sistem ujian akan mendeteksi apabila Anda keluar dari halaman ini.</li>
+                            <li>Dilarang berdiskusi, menyontek, atau menggunakan buku catatan, kalkulator, serta perangkat elektronik lain (HP/Smartwatch).</li>
+                            <li>Bacalah setiap soal dengan teliti. Beberapa soal mungkin memiliki lebih dari satu jawaban yang benar (Pilihan Ganda Kompleks).</li>
+                            <li>Jika terjadi kendala teknis (komputer macet/jaringan terputus), segera angkat tangan dan laporkan kepada pengawas ruangan tanpa membuat kegaduhan.</li>
+                        </ul>
+                        <div class="bg-blue-50 border-l-4 border-blue-500 p-3 mt-4 text-xs text-blue-800">
+                            <strong>Peringatan:</strong> Pastikan seluruh data di panel sebelah kiri (Nama, Kelas, NIS) sudah sesuai dengan identitas Anda. Jika terdapat ketidaksesuaian, jangan mulai ujian dan lapor ke pengawas.
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tombol Mulai -->
+                <button onclick="mulaiUjian()" class="w-full bg-[#e84c5f] hover:bg-[#d43d50] text-white py-3.5 rounded-md font-semibold text-lg transition-colors mt-6 shadow-md flex justify-center items-center gap-2">
+                    Mulai Ujian <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Simple Script to handle button click -->
+    <script>
+        function mulaiUjian() {
+            // Animasi tombol loading sederhana
+            const btn = document.querySelector('button');
+            const originalText = btn.innerHTML;
+            
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Menyiapkan Soal...';
+            btn.classList.add('opacity-80', 'cursor-not-allowed');
+            btn.disabled = true;
+
+            // Simulasi memuat soal (Bisa diganti dengan navigasi ke halaman soal Anda yang sebenarnya)
+            setTimeout(() => {
+                alert("Identitas dan peraturan telah disetujui. Mengarahkan ke halaman soal...");
+                // window.location.href = "halaman-soal.html"; // <-- Gunakan ini untuk pindah halaman
+                
+                // Reset tombol
+                btn.innerHTML = originalText;
+                btn.classList.remove('opacity-80', 'cursor-not-allowed');
+                btn.disabled = false;
+            }, 1000);
+        }
+    </script>
+</body>
+</html>

@@ -5,7 +5,8 @@
         android:label="IbnuTify"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
-        android:requestLegacyExternalStorage="true">
+        android:requestLegacyExternalStorage="true"
+        android:extractNativeLibs="true">
         <activity
             android:name="com.ibnutify.ibnutify.MainActivity"
             android:exported="true"

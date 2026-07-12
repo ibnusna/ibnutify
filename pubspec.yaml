@@ -1,0 +1,73 @@
+name: ibnutify
+description: "IbnuTify - A Spotify-like offline music player for Android"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Audio Engine
+  just_audio: ^0.9.40
+  audio_service: ^0.18.15
+  audio_session: ^0.1.21
+
+  # Music Scanner (Android native)
+  on_audio_query: ^2.9.0
+
+  # Database (local persistence)
+
+  # State Management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # UI / Utils
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  cached_network_image: ^3.3.1
+  shimmer: ^3.0.0
+  sliding_up_panel: ^2.0.0+1
+  marquee: ^2.3.0
+  palette_generator: ^0.3.3+4
+  percent_indicator: ^4.2.3
+
+  # Permissions
+  permission_handler: ^11.3.1
+
+  # HTTP (for Gemini AI)
+  http: ^1.2.1
+  flutter_dotenv: ^5.2.1
+
+  # Shared Preferences
+  shared_preferences: ^2.2.3
+
+  # Path Provider
+  path_provider: ^2.1.3
+
+  # Icons
+  flutter_svg: ^2.0.10+1
+  flutter_native_splash: ^2.4.4
+  sqflite: ^2.4.1
+  path: ^1.9.0
+  youtube_explode_dart: ^3.0.0
+  video_player: ^2.9.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.11
+  riverpod_generator: ^2.4.3
+  flutter_launcher_icons: ^0.14.4
+  ffi: ^2.1.3
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - .env
+

@@ -115,7 +115,8 @@ class MainActivity: FlutterActivity() {
                 "downloadTrack" -> {
                     val spotifyUrl = call.argument<String>("spotifyUrl")
                     val downloadDir = call.argument<String>("downloadDir")
-                    val ffmpegPath = call.argument<String>("ffmpegPath") ?: ""
+                    val fallbackFfmpegPath = java.io.File(context.applicationInfo.nativeLibraryDir, "libffmpeg.so").absolutePath
+                    val ffmpegPath = call.argument<String>("ffmpegPath")?.takeIf { it.isNotEmpty() } ?: fallbackFfmpegPath
 
                     if (spotifyUrl == null || downloadDir == null) {
                         result.error("INVALID_ARGUMENT", "spotifyUrl and downloadDir are required", null)
@@ -138,6 +139,19 @@ class MainActivity: FlutterActivity() {
                                 "download_track", spotifyUrl, downloadDir, ffmpegPath
                             ).toString()
 
+                            // Trigger MediaScanner scan so Android immediately detects the new music file
+                            try {
+                                val jsonObj = org.json.JSONObject(res)
+                                val filePath = jsonObj.optString("file_path", "")
+                                if (filePath.isNotEmpty()) {
+                                    android.media.MediaScannerConnection.scanFile(
+                                        context,
+                                        arrayOf(filePath),
+                                        null
+                                    ) { _, _ -> }
+                                }
+                            } catch (_: Exception) {}
+
                             Handler(Looper.getMainLooper()).post {
                                 result.success(res)
                             }
@@ -159,6 +173,18 @@ class MainActivity: FlutterActivity() {
                         result.success(res)
                     } catch (e: Exception) {
                         result.error("PROGRESS_ERROR", e.message, null)
+                    }
+                }
+
+                "getDownloadLog" -> {
+                    try {
+                        while (!Python.isStarted()) { Thread.sleep(50) }
+                        val py = Python.getInstance()
+                        val downloaderModule = py.getModule("downloader")
+                        val res = downloaderModule.callAttr("get_download_log").toString()
+                        result.success(res)
+                    } catch (e: Exception) {
+                        result.error("LOG_ERROR", e.message, null)
                     }
                 }
 

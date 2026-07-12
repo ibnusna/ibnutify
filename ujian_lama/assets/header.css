@@ -1,0 +1,116 @@
+/* ========================================
+   GLOBAL HEADER STYLES
+   Extracted from login.css & Enhanced
+======================================== */
+
+.app-header {
+    height: 4.5rem;
+    /* 72px */
+    display: flex;
+    align-items: center;
+    padding: 0 var(--space-4);
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    position: relative;
+    z-index: 20;
+    width: 100%;
+    /* Force full width */
+}
+
+.header-container {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
+    justify-content: space-between;
+    /* Ensure separation if wrapper fits */
+}
+
+.brand-logo {
+    height: 2.75rem;
+    /* 44px */
+    width: auto;
+}
+
+.brand-divider {
+    display: none;
+    /* Mobile default */
+    height: 2.5rem;
+    border-left: 2px solid var(--color-border);
+    padding-left: var(--space-4);
+}
+
+.brand-title {
+    color: var(--color-primary);
+    font-weight: var(--font-weight-bold);
+    font-size: var(--text-lg);
+    /* Reduced from lg */
+    line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0;
+    /* Reset margin */
+}
+
+/* --- LOGOUT BUTTON (NEW) --- */
+.header-logout-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: var(--radius-full);
+    background-color: var(--color-surface);
+    color: var(--color-text-muted);
+    border: 1px solid var(--color-border);
+    font-size: var(--text-lg);
+    /* Reduced from lg */
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-decoration: none;
+    /* Remove underline */
+    margin-left: auto;
+    /* Push to the right */
+    flex-shrink: 0;
+    /* Prevent shrinking */
+}
+
+/* Position adjustment: The user asked to put it NEXT TO THE LOGO. 
+   So we might not need margin-left: auto if we want it right next to it.
+   However, usually actions are on the right. 
+   "Tolong kamu tambahkan di sebelah logo yaitu tombol untuk keluar" 
+   Let's place it right after the logo/title block.
+*/
+
+.header-logout-btn:hover {
+    background-color: #fee2e2;
+    /* Light Red bg */
+    color: #ef4444;
+    /* Red Text */
+    border-color: #fecaca;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+.header-logout-btn:active {
+    transform: translateY(0);
+}
+
+/* --- RESPONSIVE BREAKPOINTS --- */
+
+/* Tablet & Up (sm) */
+@media (min-width: 640px) {
+    .brand-divider {
+        display: block;
+    }
+}
+
+/* Desktop (lg) */
+@media (min-width: 1024px) {
+    .app-header {
+        padding: 0 var(--space-12);
+        /* lg:px-12 */
+    }
+}
