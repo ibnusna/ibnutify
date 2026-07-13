@@ -5,6 +5,7 @@ import '../../../core/utils/format_utils.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/album_art_provider.dart';
 import '../../providers/lyrics_provider.dart';
+import '../../providers/connectivity_provider.dart';
 import '../../../services/album_art_service.dart';
 import '../../widgets/common/song_artwork_widget.dart';
 import '../../widgets/player/more_options_sheet.dart';
@@ -80,6 +81,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     final currentSong = playerState.currentSong;
     final albumArtState = ref.watch(albumArtProvider);
     final isVideoMode = ref.watch(isVideoModeProvider);
+    final isOffline = ref.watch(isOfflineProvider);
     final hasVideo = currentSong?.youtubeUrl != null && currentSong!.youtubeUrl!.isNotEmpty;
 
     // Trigger gradient animation when colors change
@@ -515,25 +517,49 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                               children: [
                                 hasVideo
                                     ? GestureDetector(
-                                        onTap: () {
-                                          ref.read(isVideoModeProvider.notifier).state = !isVideoMode;
-                                        },
+                                        onTap: isOffline
+                                            ? () {
+                                                ScaffoldMessenger.of(context)
+                                                    .showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                        'Video tidak tersedia tanpa koneksi internet'),
+                                                    behavior:
+                                                        SnackBarBehavior.floating,
+                                                  ),
+                                                );
+                                              }
+                                            : () {
+                                                ref
+                                                    .read(isVideoModeProvider
+                                                        .notifier)
+                                                    .state = !isVideoMode;
+                                              },
                                         child: AnimatedContainer(
-                                          duration: const Duration(milliseconds: 250),
+                                          duration: const Duration(
+                                              milliseconds: 250),
                                           padding: const EdgeInsets.all(8),
                                           decoration: BoxDecoration(
-                                            color: isVideoMode
-                                                ? AppColors.primary.withOpacity(0.2)
-                                                : Colors.transparent,
-                                            borderRadius: BorderRadius.circular(8),
+                                            color: isOffline
+                                                ? Colors.transparent
+                                                : (isVideoMode
+                                                    ? AppColors.primary
+                                                        .withOpacity(0.2)
+                                                    : Colors.transparent),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
                                           ),
                                           child: Icon(
                                             isVideoMode
                                                 ? Icons.videocam_rounded
                                                 : Icons.videocam_outlined,
-                                            color: isVideoMode
-                                                ? AppColors.primary
-                                                : AppColors.onSurfaceVariant,
+                                            color: isOffline
+                                                ? AppColors.onSurfaceVariant
+                                                    .withOpacity(0.3)
+                                                : (isVideoMode
+                                                    ? AppColors.primary
+                                                    : AppColors
+                                                        .onSurfaceVariant),
                                             size: 20,
                                           ),
                                         ),

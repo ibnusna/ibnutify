@@ -23,7 +23,10 @@ import 'package:ibnutify/services/smart_shuffle_order.dart';
 ///    untuk mencegah metadata-flip saat pause.
 class IbnuTifyAudioHandler extends BaseAudioHandler
     with QueueHandler, SeekHandler {
-  final AudioPlayer _player = AudioPlayer();
+  final AudioPlayer _player = AudioPlayer(
+    handleInterruptions: false,
+    handleAudioSessionActivation: false,
+  );
   ConcatenatingAudioSource? _audioSource;
   final Map<int, String> _artworksCache = {};
   
