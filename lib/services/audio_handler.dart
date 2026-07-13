@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
@@ -26,7 +27,7 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
   ConcatenatingAudioSource? _audioSource;
   final Map<int, String> _artworksCache = {};
   
-  SmartShuffleOrder _smartShuffleOrder = SmartShuffleOrder(length: 0);
+  SmartShuffleOrder _smartShuffleOrder = SmartShuffleOrder();
 
   int _manualQueueCount = 0;
   int _lastIndex = -1;
@@ -185,7 +186,7 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
       );
     }).toList();
     
-    _smartShuffleOrder = SmartShuffleOrder(length: sources.length);
+    _smartShuffleOrder = SmartShuffleOrder();
 
     _audioSource = ConcatenatingAudioSource(
       children: sources,

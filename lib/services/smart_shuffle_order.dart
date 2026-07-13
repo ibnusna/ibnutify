@@ -3,14 +3,16 @@ import 'package:just_audio/just_audio.dart';
 /// A custom ShuffleOrder implementation that allows dynamic injection
 /// of pre-calculated smart shuffle indices without stopping playback.
 class SmartShuffleOrder implements ShuffleOrder {
-  List<int> _indices;
+  List<int> _indices = [];
 
-  SmartShuffleOrder({int length = 0}) : _indices = List.generate(length, (i) => i);
+  SmartShuffleOrder();
 
   /// Overwrites the current shuffle indices.
   /// Used by PlayerNotifier to inject the smart sequence.
   void updateIndices(List<int> newIndices) {
-    _indices = List.from(newIndices);
+    if (newIndices.isNotEmpty) {
+      _indices = List.from(newIndices);
+    }
   }
 
   @override
@@ -42,11 +44,13 @@ class SmartShuffleOrder implements ShuffleOrder {
 
   @override
   void shuffle({int? initialIndex}) {
+    if (_indices.isEmpty) return;
+    
     // DO NOTHING.
     // The indices are completely managed by updateIndices().
     // We only ensure initialIndex is placed at the front if provided, 
     // so just_audio starts playing the right track.
-    if (initialIndex != null) {
+    if (initialIndex != null && _indices.contains(initialIndex)) {
       _indices.remove(initialIndex);
       _indices.insert(0, initialIndex);
     }

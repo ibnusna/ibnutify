@@ -85,22 +85,28 @@ def _scrape_track_metadata(spotify_url):
     """Scrape judul, artis, album, cover_url, dan tahun dari Spotify embed page."""
     try:
         import requests
-    except ImportError:
+    except ImportError as e:
+        _add_debug_log("[ERROR] ImportError in _scrape_track_metadata: " + str(e))
         return None
 
     track_id_match = re.search(r'/track/([a-zA-Z0-9]+)', spotify_url)
     if not track_id_match:
         track_id_match = re.search(r'spotify:track:([a-zA-Z0-9]+)', spotify_url)
     if not track_id_match:
+        _add_debug_log("[ERROR] Could not extract track ID from URL: " + str(spotify_url))
         return None
 
     track_id = track_id_match.group(1)
+    _add_debug_log("Extracted track ID: " + track_id)
 
     for attempt in range(3):
         try:
             embed_url = 'https://open.spotify.com/embed/track/{}'.format(track_id)
             headers = {'User-Agent': 'Mozilla/5.0'}
             response = requests.get(embed_url, headers=headers, timeout=15)
+            
+            if response.status_code != 200:
+                _add_debug_log("[WARNING] Spotify returned HTTP {}".format(response.status_code))
 
             match = re.search(
                 r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
@@ -139,10 +145,15 @@ def _scrape_track_metadata(spotify_url):
                     'cover_url': cover_url,
                     'year': release_year,
                 }
+            else:
+                _add_debug_log("[WARNING] __NEXT_DATA__ not found in response text on attempt {}".format(attempt + 1))
         except Exception as e:
+            _add_debug_log("[WARNING] Exception during scrape attempt {}: {}".format(attempt + 1, str(e)))
             if attempt < 2:
                 time.sleep(1)
                 continue
+            
+    _add_debug_log("[ERROR] Failed to scrape track metadata after 3 attempts.")
     return None
 
 

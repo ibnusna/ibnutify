@@ -19,6 +19,7 @@ class _MusicVideoPlayerState extends ConsumerState<MusicVideoPlayer> {
   final YoutubeExplode _yt = YoutubeExplode();
   bool _isPlayerReady = false;
   bool _isLoading = true;
+  bool _isSeeking = false;
   String? _errorMessage;
 
   @override
@@ -46,10 +47,27 @@ class _MusicVideoPlayerState extends ConsumerState<MusicVideoPlayer> {
 
       var videoId = VideoId(widget.youtubeUrl);
       var manifest = await _yt.videos.streamsClient.getManifest(videoId);
-      // Use muxed streams to be safe, highest bitrate
-      var streamInfo = manifest.muxed.withHighestBitrate();
+      
+      // Get all muxed streams and sort by video quality (ascending/descending doesn't matter since we search manually)
+      final sortedStreams = manifest.muxed.sortByVideoQuality().toList();
+      
+      MuxedStreamInfo? streamInfo;
+      // Prefer 360p or 480p for stable playback
+      for (var stream in sortedStreams) {
+        final h = stream.videoResolution.height;
+        if (h == 360 || h == 480) {
+          streamInfo = stream;
+          break; // Found stable resolution
+        }
+      }
+      
+      // Fallback: If 360/480 not found, pick the lowest to guarantee no lag
+      streamInfo ??= sortedStreams.isNotEmpty ? sortedStreams.first : manifest.muxed.withHighestBitrate();
 
-      _controller = VideoPlayerController.network(streamInfo.url.toString());
+      _controller = VideoPlayerController.network(
+        streamInfo.url.toString(),
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+      );
       
       await _controller!.initialize();
       await _controller!.setVolume(0.0); // Muted
@@ -100,23 +118,27 @@ class _MusicVideoPlayerState extends ConsumerState<MusicVideoPlayer> {
       );
     }
 
-    final playerState = ref.watch(playerProvider);
-    
-    // Sync with just_audio state
-    if (_isPlayerReady && _controller != null) {
-      if (playerState.isPlaying && !_controller!.value.isPlaying) {
+    ref.listen(playerProvider, (prev, next) {
+      if (!_isPlayerReady || _controller == null || _isSeeking) return;
+
+      // Sync play/pause
+      if (next.isPlaying && !_controller!.value.isPlaying) {
         _controller!.play();
-      } else if (!playerState.isPlaying && _controller!.value.isPlaying) {
+      } else if (!next.isPlaying && _controller!.value.isPlaying) {
         _controller!.pause();
       }
       
-      // If the difference is > 1.5 seconds, sync position
+      // Sync position if out of sync by > 2000 ms
       final ytPosition = _controller!.value.position;
-      final diff = (ytPosition.inMilliseconds - playerState.position.inMilliseconds).abs();
-      if (diff > 1500) {
-        _controller!.seekTo(playerState.position);
+      final diff = (ytPosition.inMilliseconds - next.position.inMilliseconds).abs();
+      
+      if (diff > 2000) {
+        _isSeeking = true;
+        _controller!.seekTo(next.position).then((_) {
+          _isSeeking = false;
+        });
       }
-    }
+    });
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
