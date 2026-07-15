@@ -647,3 +647,374 @@ def _add_generic_metadata(filepath, track_info, youtube_url):
         audio.save()
     except Exception:
         pass
+
+
+# ─── Public: get_playlist_tracks ─────────────────────────────────────────────
+
+def get_playlist_tracks(spotify_url):
+    """
+    Ambil daftar track dari Spotify playlist URL (scraping).
+
+    Args:
+        spotify_url: URL Spotify playlist.
+
+    Return JSON: {success, playlist_name, tracks: [{title, artist, album, cover_url, year}, ...], error}
+    """
+    try:
+        import requests
+    except ImportError as e:
+        return json.dumps({'success': False, 'error': 'requests not available: ' + str(e)})
+
+    _add_debug_log("get_playlist_tracks called for: {}".format(spotify_url))
+    _set_progress(status='fetching_metadata', current_title='', current_artist='')
+
+    playlist_name = None
+    tracks = []
+
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+        }
+        r = requests.get(spotify_url, headers=headers, timeout=20)
+        if r.status_code != 200:
+            raise Exception('HTTP {}'.format(r.status_code))
+
+        # Ambil nama playlist dari og:title
+        title_match = re.search(r'<meta property="og:title" content="(.*?)"', r.text)
+        if title_match:
+            playlist_name = html.unescape(title_match.group(1))
+        _add_debug_log("Playlist name: {}".format(playlist_name))
+
+        # Cari Track ID dari halaman HTML playlist
+        ids = list(dict.fromkeys(re.findall(r'/track/([a-zA-Z0-9]{22})', r.text)))
+        if not ids:
+            ids = list(dict.fromkeys(re.findall(r'spotify:track:([a-zA-Z0-9]{22})', r.text)))
+
+        if not ids:
+            raise Exception('Tidak ada track ditemukan di playlist. Coba buka URL di browser dulu.')
+
+        _add_debug_log("Found {} track IDs in playlist.".format(len(ids)))
+
+        # Scrape metadata tiap track
+        for i, track_id in enumerate(ids):
+            _add_debug_log("Scraping metadata track {}/{}: {}".format(i + 1, len(ids), track_id))
+            _set_progress(
+                status='fetching_metadata',
+                current_title='Membaca track {}/{}...'.format(i + 1, len(ids)),
+                total_songs=len(ids),
+                current_song_index=i + 1,
+            )
+            track_url = 'https://open.spotify.com/track/{}'.format(track_id)
+            meta = _scrape_track_metadata(track_url)
+            if meta:
+                tracks.append({
+                    'title': meta.get('title', 'Unknown Title'),
+                    'artist': meta.get('artist', 'Unknown Artist'),
+                    'album': meta.get('album', 'Unknown Album'),
+                    'cover_url': meta.get('cover_url', ''),
+                    'year': meta.get('year', ''),
+                })
+            # Jeda kecil agar tidak di-rate-limit Spotify
+            if i < len(ids) - 1:
+                time.sleep(0.15)
+
+    except Exception as e:
+        _add_debug_log("[ERROR] get_playlist_tracks failed: {}".format(e))
+        _set_progress(status='error', error=str(e))
+        return json.dumps({'success': False, 'error': str(e), 'playlist_name': None, 'tracks': []})
+
+    _set_progress(status='idle')
+    return json.dumps({
+        'success': True,
+        'playlist_name': playlist_name or 'Playlist',
+        'tracks': tracks,
+        'error': '',
+    })
+
+
+# ─── Public: download_playlist ────────────────────────────────────────────────
+
+def download_playlist(spotify_url, download_dir, ffmpeg_path=''):
+    """
+    Download semua track dari Spotify playlist URL.
+
+    Struktur folder output: {download_dir}/{clean_playlist_name}/{title}.mp3
+
+    Args:
+        spotify_url  : URL Spotify playlist.
+        download_dir : Path absolut ke direktori root output (e.g. /storage/emulated/0/Download/Ibnutify).
+        ffmpeg_path  : Path ke binary ffmpeg (opsional).
+
+    Return JSON: {success, playlist_name, total, successful, failed: [title, ...], error}
+    """
+    global _debug_logs
+    with _debug_lock:
+        _debug_logs = []
+
+    _add_debug_log("=========================================")
+    _add_debug_log("download_playlist called for: {}".format(spotify_url))
+    _add_debug_log("Download directory: {}".format(download_dir))
+    _add_debug_log("FFmpeg path: {}".format(ffmpeg_path))
+
+    # ── 1. Ambil daftar track dari playlist ───────────────────────────────────
+    _add_debug_log("Step 1: Fetching playlist track list...")
+    try:
+        import requests
+    except ImportError as e:
+        err = 'requests not available: ' + str(e)
+        _set_progress(status='error', error=err)
+        return json.dumps({'success': False, 'error': err})
+
+    # Ambil nama playlist dan daftar track ID dari halaman Spotify
+    playlist_name = 'Playlist'
+    track_metas = []
+
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+        }
+        r = requests.get(spotify_url, headers=headers, timeout=20)
+        if r.status_code != 200:
+            raise Exception('Gagal akses halaman playlist: HTTP {}'.format(r.status_code))
+
+        title_match = re.search(r'<meta property="og:title" content="(.*?)"', r.text)
+        if title_match:
+            playlist_name = html.unescape(title_match.group(1))
+
+        ids = list(dict.fromkeys(re.findall(r'/track/([a-zA-Z0-9]{22})', r.text)))
+        if not ids:
+            ids = list(dict.fromkeys(re.findall(r'spotify:track:([a-zA-Z0-9]{22})', r.text)))
+        if not ids:
+            raise Exception('Tidak ada track ditemukan di playlist. Pastikan URL playlist valid.')
+
+        _add_debug_log("Playlist: '{}', {} tracks found.".format(playlist_name, len(ids)))
+
+        # Scrape metadata tiap track
+        for i, track_id in enumerate(ids):
+            _add_debug_log("Scraping metadata track {}/{}: {}".format(i + 1, len(ids), track_id))
+            _set_progress(
+                status='fetching_metadata',
+                current_title='Membaca info track {}/{}...'.format(i + 1, len(ids)),
+                total_songs=len(ids),
+                current_song_index=i + 1,
+            )
+            track_url = 'https://open.spotify.com/track/{}'.format(track_id)
+            meta = _scrape_track_metadata(track_url)
+            if meta:
+                track_metas.append(meta)
+            if i < len(ids) - 1:
+                time.sleep(0.15)
+
+    except Exception as e:
+        err = str(e)
+        _add_debug_log("[ERROR] Failed to fetch playlist tracks: " + err)
+        _set_progress(status='error', error=err)
+        return json.dumps({'success': False, 'playlist_name': playlist_name, 'error': err, 'total': 0, 'successful': 0, 'failed': []})
+
+    if not track_metas:
+        err = 'Gagal mengambil metadata untuk semua track di playlist.'
+        _set_progress(status='error', error=err)
+        return json.dumps({'success': False, 'playlist_name': playlist_name, 'error': err, 'total': 0, 'successful': 0, 'failed': []})
+
+    # ── 2. Buat subfolder playlist ────────────────────────────────────────────
+    clean_playlist_name = re.sub(r'[\\/*?:"<>|]', '', playlist_name).strip() or 'Playlist'
+    playlist_folder = os.path.join(download_dir, clean_playlist_name)
+    if not os.path.exists(playlist_folder):
+        os.makedirs(playlist_folder)
+    _add_debug_log("Playlist folder: {}".format(playlist_folder))
+
+    total = len(track_metas)
+    successful = 0
+    failed = []
+    use_ffmpeg = bool(ffmpeg_path and os.path.exists(ffmpeg_path))
+
+    # ── 3. Download tiap track ────────────────────────────────────────────────
+    for idx, track_info in enumerate(track_metas):
+        _add_debug_log("--- Downloading track {}/{}: {} - {}".format(
+            idx + 1, total, track_info.get('artist', ''), track_info.get('title', '')
+        ))
+
+        # Update progress state untuk polling
+        _set_progress(
+            status='fetching_metadata',
+            percent=0.0,
+            current_title=track_info.get('title', ''),
+            current_artist=track_info.get('artist', ''),
+            total_songs=total,
+            current_song_index=idx + 1,
+            error='',
+        )
+
+        # Pengaya metadata (iTunes + lirik)
+        try:
+            itunes_genre, itunes_year, itunes_album = _get_itunes_metadata(
+                track_info['title'], track_info['artist']
+            )
+            if itunes_genre:
+                track_info['genre'] = itunes_genre
+            if not track_info.get('year') and itunes_year:
+                track_info['year'] = itunes_year
+            if track_info.get('album', 'Unknown Album') == 'Unknown Album' and itunes_album:
+                track_info['album'] = itunes_album
+        except Exception:
+            pass
+
+        try:
+            lyrics, synced_lyrics = _get_lyrics(track_info['title'], track_info['artist'])
+            if lyrics and 'tidak ditemukan' not in lyrics:
+                track_info['lyrics'] = lyrics
+                if synced_lyrics:
+                    track_info['synced_lyrics'] = synced_lyrics
+        except Exception:
+            pass
+
+        # Nama file
+        clean_title = re.sub(r'[\\/*?:"<>|]', '', track_info['title'])
+        output_path = os.path.join(playlist_folder, clean_title)
+        final_ext = 'mp3' if use_ffmpeg else 'm4a'
+        final_filepath = '{}.{}'.format(output_path, final_ext)
+
+        # Cek apakah sudah ada
+        file_exists = False
+        for f in os.listdir(playlist_folder):
+            name_no_ext = os.path.splitext(f)[0]
+            if name_no_ext == clean_title:
+                file_exists = True
+                final_filepath = os.path.join(playlist_folder, f)
+                break
+
+        if file_exists:
+            _add_debug_log("  Skipping (already exists): {}".format(final_filepath))
+            _set_progress(status='skipped', percent=100.0, file_path=final_filepath)
+            successful += 1
+            continue
+
+        # Build yt-dlp options
+        _set_progress(status='downloading', percent=0.0)
+        search_query = 'ytsearch1:{} {} audio'.format(
+            track_info['artist'], track_info['title']
+        )
+
+        def _progress_hook(d, _fp=final_filepath):
+            status = d.get('status', '')
+            if status == 'downloading':
+                total_b = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
+                downloaded_b = d.get('downloaded_bytes', 0)
+                pct = (downloaded_b / total_b * 100.0) if total_b > 0 else 0.0
+                eta = d.get('eta', 0) or 0
+                speed = d.get('_speed_str', '') or ''
+                _set_progress(
+                    status='downloading',
+                    percent=round(pct, 1),
+                    eta_seconds=int(eta),
+                    speed_str=speed,
+                )
+            elif status == 'finished':
+                _set_progress(status='converting', percent=99.0, eta_seconds=0)
+
+        ydl_opts = {
+            'default_search': 'ytsearch1',
+            'noplaylist': True,
+            'quiet': False,
+            'no_warnings': False,
+            'logger': YtdlpLogger(),
+            'progress_hooks': [_progress_hook],
+            'outtmpl': output_path + '.%(ext)s',
+            'retries': 10,
+            'fragment_retries': 10,
+            'socket_timeout': 60,
+            'http_chunk_size': 1048576,
+            'extractor_retries': 3,
+            'extractor_args': {
+                'youtube': {'player_client': ['android', 'web']}
+            },
+        }
+
+        if use_ffmpeg:
+            ydl_opts['format'] = 'bestaudio/best'
+            ydl_opts['postprocessors'] = [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '320',
+            }]
+            ydl_opts['postprocessor_args'] = [
+                '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11,bass=g=4,treble=g=3'
+            ]
+            ydl_opts['ffmpeg_location'] = ffmpeg_path
+        else:
+            ydl_opts['format'] = 'bestaudio[ext=m4a]/bestaudio/best'
+
+        try:
+            import yt_dlp
+            youtube_url = None
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(search_query, download=True)
+                if info and 'entries' in info and len(info['entries']) > 0:
+                    youtube_url = info['entries'][0].get('webpage_url')
+                elif info:
+                    youtube_url = info.get('webpage_url')
+
+            # Cari file hasil download
+            found = None
+            for f in os.listdir(playlist_folder):
+                name_no_ext = os.path.splitext(f)[0]
+                if name_no_ext == clean_title:
+                    found = os.path.join(playlist_folder, f)
+                    break
+
+            if found:
+                final_filepath = found
+            elif not os.path.exists(final_filepath):
+                raise RuntimeError('File output tidak ditemukan setelah download.')
+
+            # Tambah metadata
+            _set_progress(status='tagging', percent=99.5)
+            if final_filepath.endswith('.mp3'):
+                _add_mp3_metadata(final_filepath, track_info, youtube_url)
+            else:
+                _add_generic_metadata(final_filepath, track_info, youtube_url)
+
+            _set_progress(
+                status='done',
+                percent=100.0,
+                file_path=final_filepath,
+                total_songs=total,
+                current_song_index=idx + 1,
+            )
+            successful += 1
+            _add_debug_log("  Track downloaded OK: {}".format(final_filepath))
+
+        except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            _add_debug_log("[ERROR] Failed track '{}': {}\n{}".format(track_info['title'], e, tb))
+            failed.append(track_info.get('title', 'Unknown'))
+
+        # Jeda antar track
+        if idx < total - 1:
+            time.sleep(0.5)
+
+    # ── 4. Final state ────────────────────────────────────────────────────────
+    all_ok = (successful == total)
+    _set_progress(
+        status='done' if all_ok else ('error' if successful == 0 else 'done'),
+        percent=100.0,
+        total_songs=total,
+        current_song_index=total,
+    )
+    _add_debug_log("download_playlist finished: {}/{} ok, failed={}".format(successful, total, failed))
+    _add_debug_log("=========================================")
+
+    return json.dumps({
+        'success': successful > 0,
+        'playlist_name': playlist_name,
+        'total': total,
+        'successful': successful,
+        'failed': failed,
+        'playlist_folder': playlist_folder,
+        'error': '',
+    })

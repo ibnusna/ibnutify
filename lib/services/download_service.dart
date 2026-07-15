@@ -126,6 +126,51 @@ class DownloadResult {
   }
 }
 
+/// Hasil download playlist.
+class PlaylistResult {
+  final bool success;
+  final String playlistName;
+  final int total;
+  final int successful;
+  final List<String> failed;
+  final String playlistFolder;
+  final String error;
+
+  const PlaylistResult({
+    required this.success,
+    required this.playlistName,
+    required this.total,
+    required this.successful,
+    required this.failed,
+    required this.playlistFolder,
+    required this.error,
+  });
+
+  factory PlaylistResult.fromJson(Map<String, dynamic> json) {
+    return PlaylistResult(
+      success: json['success'] as bool? ?? false,
+      playlistName: json['playlist_name'] as String? ?? '',
+      total: (json['total'] as num? ?? 0).toInt(),
+      successful: (json['successful'] as num? ?? 0).toInt(),
+      failed: (json['failed'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      playlistFolder: json['playlist_folder'] as String? ?? '',
+      error: json['error'] as String? ?? '',
+    );
+  }
+
+  factory PlaylistResult.failure(String message) {
+    return PlaylistResult(
+      success: false,
+      playlistName: '',
+      total: 0,
+      successful: 0,
+      failed: const [],
+      playlistFolder: '',
+      error: message,
+    );
+  }
+}
+
 /// Metadata cepat tanpa download.
 class TrackMetadata {
   final String title;
@@ -244,9 +289,45 @@ class DownloadService {
     }
   }
 
+  /// Download seluruh playlist dari Spotify URL.
+  Future<PlaylistResult> downloadPlaylist(String spotifyUrl, {String ffmpegPath = ''}) async {
+    try {
+      final downloadDir = await getDownloadDir();
+      final dir = Directory(downloadDir);
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+
+      final raw = await _channel.invokeMethod<String>('downloadPlaylist', {
+        'spotifyUrl': spotifyUrl,
+        'downloadDir': downloadDir,
+        'ffmpegPath': ffmpegPath,
+      });
+
+      if (raw == null) return PlaylistResult.failure('Tidak ada response dari downloader.');
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      return PlaylistResult.fromJson(json);
+    } on PlatformException catch (e) {
+      return PlaylistResult.failure(e.message ?? 'Platform error tidak diketahui.');
+    } catch (e) {
+      return PlaylistResult.failure('Error: $e');
+    }
+  }
+
   /// Validasi apakah string adalah Spotify track URL yang valid.
   static bool isSpotifyTrackUrl(String input) {
     return input.contains('open.spotify.com/track/') ||
         input.contains('spotify:track:');
+  }
+
+  /// Validasi apakah string adalah Spotify playlist URL yang valid.
+  static bool isSpotifyPlaylistUrl(String input) {
+    return input.contains('open.spotify.com/playlist/') ||
+        input.contains('spotify:playlist:');
+  }
+
+  /// Validasi apakah string adalah Spotify track atau playlist URL.
+  static bool isSpotifyUrl(String input) {
+    return isSpotifyTrackUrl(input) || isSpotifyPlaylistUrl(input);
   }
 }

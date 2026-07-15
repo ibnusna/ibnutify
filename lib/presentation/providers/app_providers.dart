@@ -947,9 +947,11 @@ class DownloadNotifier extends Notifier<DownloadState> {
       content: '**Download Music**\n\n'
           'Oke! Paste link Spotify kamu di sini ya.\n'
           'Format yang didukung:\n'
-          '`https://open.spotify.com/track/...`\n\n'
+          '• Track: `https://open.spotify.com/track/...`\n'
+          '• Playlist: `https://open.spotify.com/playlist/...`\n\n'
           'Lagu akan disimpan di:\n'
-          '`Download/Ibnutify/`',
+          '`Download/Ibnutify/`\n'
+          '_(Playlist akan disimpan di subfolder sesuai nama playlist)_',
     );
     state = state.copyWith(
       awaitingUrl: true,
@@ -959,6 +961,12 @@ class DownloadNotifier extends Notifier<DownloadState> {
 
   /// User mengirim teks saat mode awaitingUrl — langsung proses sebagai URL.
   Future<void> handleUserInput(String input) async {
+    // Routing: cek playlist dulu, lalu track, lalu error
+    if (DownloadService.isSpotifyPlaylistUrl(input)) {
+      await _handlePlaylistDownload(input);
+      return;
+    }
+
     if (!DownloadService.isSpotifyTrackUrl(input)) {
       final errMsg = DownloadChatMessage(
         content: '**URL tidak valid.**\n\nMasukkan link Spotify track yang benar.\n'
@@ -1042,6 +1050,72 @@ class DownloadNotifier extends Notifier<DownloadState> {
       resultMsg = DownloadChatMessage(
         content: '**Unduhan gagal**\n\n${result.error}\n\n'
             'Coba lagi dengan link Spotify yang berbeda.',
+      );
+    }
+
+    state = state.copyWith(
+      isDownloading: false,
+      messages: [...updatedMsgs, resultMsg],
+    );
+  }
+
+  /// Handle download seluruh playlist Spotify.
+  Future<void> _handlePlaylistDownload(String url) async {
+    final fetchingMsg = DownloadChatMessage(
+      content: '🎵 Mengambil daftar lagu dari playlist Spotify...\n'
+          '_Ini mungkin butuh beberapa detik tergantung jumlah track._',
+    );
+    state = state.copyWith(
+      awaitingUrl: false,
+      messages: [...state.messages, fetchingMsg],
+    );
+
+    final service = DownloadService.instance;
+
+    // Tampilkan progress bubble sementara
+    final progressMsg = DownloadChatMessage(
+      content: 'Membaca informasi playlist...',
+      isProgress: true,
+      progress: const DownloadProgress(),
+    );
+    final msgsWithProgress = [...state.messages, progressMsg];
+    state = state.copyWith(isDownloading: true, messages: msgsWithProgress);
+
+    _startPolling();
+
+    // Panggil download_playlist (all-in-one: scrape + download semua track)
+    final result = await service.downloadPlaylist(url);
+    _stopPolling();
+
+    // Trigger local library scan jika ada yang berhasil
+    if (result.success) {
+      ref.read(songsProvider.notifier).scanDeviceSongs();
+    }
+
+    // Hapus progress bubble terakhir
+    final updatedMsgs = List<DownloadChatMessage>.from(state.messages);
+    if (updatedMsgs.isNotEmpty && updatedMsgs.last.isProgress) {
+      updatedMsgs.removeLast();
+    }
+
+    DownloadChatMessage resultMsg;
+    if (result.success) {
+      final failedInfo = result.failed.isNotEmpty
+          ? '\n\n⚠️ ${result.failed.length} track gagal:\n- ${result.failed.join('\n- ')}'
+          : '';
+      resultMsg = DownloadChatMessage(
+        content: '**✅ Playlist selesai diunduh!**\n\n'
+            'Playlist: **${result.playlistName}**\n'
+            'Total: ${result.total} lagu\n'
+            'Berhasil: ${result.successful} lagu$failedInfo\n\n'
+            'Tersimpan di:\n'
+            '`Download/Ibnutify/${result.playlistName}/`',
+      );
+    } else {
+      resultMsg = DownloadChatMessage(
+        content: '**❌ Gagal mengunduh playlist**\n\n'
+            '${result.error.isNotEmpty ? result.error : 'Terjadi error tidak diketahui.'}\n\n'
+            'Pastikan URL playlist Spotify valid dan koneksi internet stabil.',
       );
     }
 

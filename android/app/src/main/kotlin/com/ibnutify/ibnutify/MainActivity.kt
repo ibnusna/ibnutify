@@ -211,7 +211,87 @@ class MainActivity: FlutterActivity() {
                     }
                 }
 
+                "getPlaylistTracks" -> {
+                    val spotifyUrl = call.argument<String>("spotifyUrl")
+                    if (spotifyUrl == null) {
+                        result.error("INVALID_ARGUMENT", "spotifyUrl is required", null)
+                        return@setMethodCallHandler
+                    }
+                    thread {
+                        try {
+                            while (!Python.isStarted()) { Thread.sleep(100) }
+                            val py = Python.getInstance()
+                            val downloaderModule = py.getModule("downloader")
+                            val res = downloaderModule.callAttr("get_playlist_tracks", spotifyUrl).toString()
+                            Handler(Looper.getMainLooper()).post {
+                                result.success(res)
+                            }
+                        } catch (e: Exception) {
+                            Handler(Looper.getMainLooper()).post {
+                                result.error("PLAYLIST_TRACKS_ERROR", e.message, null)
+                            }
+                        }
+                    }
+                }
+
+                "downloadPlaylist" -> {
+                    val spotifyUrl = call.argument<String>("spotifyUrl")
+                    val downloadDir = call.argument<String>("downloadDir")
+                    val fallbackFfmpegPath = java.io.File(context.applicationInfo.nativeLibraryDir, "libffmpeg.so").absolutePath
+                    val ffmpegPath = call.argument<String>("ffmpegPath")?.takeIf { it.isNotEmpty() } ?: fallbackFfmpegPath
+
+                    if (spotifyUrl == null || downloadDir == null) {
+                        result.error("INVALID_ARGUMENT", "spotifyUrl and downloadDir are required", null)
+                        return@setMethodCallHandler
+                    }
+
+                    // Pastikan folder root ada
+                    try {
+                        val dir = java.io.File(downloadDir)
+                        if (!dir.exists()) dir.mkdirs()
+                    } catch (_: Exception) {}
+
+                    thread {
+                        try {
+                            while (!Python.isStarted()) { Thread.sleep(100) }
+                            val py = Python.getInstance()
+                            val downloaderModule = py.getModule("downloader")
+
+                            val res = downloaderModule.callAttr(
+                                "download_playlist", spotifyUrl, downloadDir, ffmpegPath
+                            ).toString()
+
+                            // Scan semua file audio di subfolder playlist agar MediaStore mengenali file baru
+                            try {
+                                val jsonObj = org.json.JSONObject(res)
+                                val playlistFolder = jsonObj.optString("playlist_folder", "")
+                                if (playlistFolder.isNotEmpty()) {
+                                    val folder = java.io.File(playlistFolder)
+                                    val audioFiles = folder.listFiles { f ->
+                                        f.isFile && (f.name.endsWith(".mp3") || f.name.endsWith(".m4a"))
+                                    }
+                                    if (!audioFiles.isNullOrEmpty()) {
+                                        val paths = audioFiles.map { it.absolutePath }.toTypedArray()
+                                        android.media.MediaScannerConnection.scanFile(
+                                            context, paths, null
+                                        ) { _, _ -> }
+                                    }
+                                }
+                            } catch (_: Exception) {}
+
+                            Handler(Looper.getMainLooper()).post {
+                                result.success(res)
+                            }
+                        } catch (e: Exception) {
+                            Handler(Looper.getMainLooper()).post {
+                                result.error("DOWNLOAD_PLAYLIST_ERROR", e.message, null)
+                            }
+                        }
+                    }
+                }
+
                 else -> result.notImplemented()
+
             }
         }
     }
