@@ -1,16 +1,21 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:ibnutify/data/datasources/database_helper.dart';
 import 'package:ibnutify/data/datasources/music_local_datasource.dart';
 import 'package:ibnutify/data/datasources/gemini_datasource.dart';
 import 'package:ibnutify/data/repositories/music_repository.dart';
 import 'package:ibnutify/data/models/song_model.dart';
 import 'package:ibnutify/data/models/playlist_model.dart';
+import 'package:ibnutify/data/models/activity_model.dart';
 import 'package:ibnutify/services/audio_handler.dart';
 import 'package:ibnutify/services/album_art_service.dart';
+import 'package:ibnutify/services/location_service.dart';
 import 'package:ibnutify/services/ml_service.dart';
 import 'package:ibnutify/services/download_service.dart';
 import 'package:ibnutify/services/smart_shuffle_service.dart';
@@ -1223,3 +1228,205 @@ class DownloadNotifier extends Notifier<DownloadState> {
 
 final downloadProvider =
     NotifierProvider<DownloadNotifier, DownloadState>(DownloadNotifier.new);
+
+// ─── Workout State ─────────────────────────────────────────────────────────────
+
+/// Satu titik koordinat GPS
+class LatLngPoint {
+  final double lat;
+  final double lng;
+  const LatLngPoint(this.lat, this.lng);
+}
+
+class WorkoutState {
+  final String sportMode;
+  final int elapsedSeconds;
+  final double distanceKm;
+  final List<LatLngPoint> routePoints;
+  final bool isRunning;
+  final bool isPaused;
+  final bool locationGranted;
+  final int songsPlayed;
+
+  const WorkoutState({
+    this.sportMode = '',
+    this.elapsedSeconds = 0,
+    this.distanceKm = 0.0,
+    this.routePoints = const [],
+    this.isRunning = false,
+    this.isPaused = false,
+    this.locationGranted = false,
+    this.songsPlayed = 0,
+  });
+
+  WorkoutState copyWith({
+    String? sportMode,
+    int? elapsedSeconds,
+    double? distanceKm,
+    List<LatLngPoint>? routePoints,
+    bool? isRunning,
+    bool? isPaused,
+    bool? locationGranted,
+    int? songsPlayed,
+  }) =>
+      WorkoutState(
+        sportMode: sportMode ?? this.sportMode,
+        elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
+        distanceKm: distanceKm ?? this.distanceKm,
+        routePoints: routePoints ?? this.routePoints,
+        isRunning: isRunning ?? this.isRunning,
+        isPaused: isPaused ?? this.isPaused,
+        locationGranted: locationGranted ?? this.locationGranted,
+        songsPlayed: songsPlayed ?? this.songsPlayed,
+      );
+
+  String get avgPace {
+    if (distanceKm <= 0) return '--\'--"/km';
+    final secsPerKm = (elapsedSeconds / distanceKm).round();
+    final m = secsPerKm ~/ 60;
+    final s = secsPerKm % 60;
+    return "$m'${s.toString().padLeft(2, '0')}\"/km";
+  }
+
+  String get formattedDuration {
+    final h = elapsedSeconds ~/ 3600;
+    final m = (elapsedSeconds % 3600) ~/ 60;
+    final s = elapsedSeconds % 60;
+    return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  ActivityModel toActivity() {
+    final routeJson = jsonEncode(
+      routePoints.map((p) => {'lat': p.lat, 'lng': p.lng}).toList(),
+    );
+    return ActivityModel(
+      sportMode: sportMode,
+      duration: elapsedSeconds,
+      distance: distanceKm,
+      routePoints: routeJson,
+      createdAt: DateTime.now().toIso8601String(),
+    );
+  }
+}
+
+class WorkoutNotifier extends Notifier<WorkoutState> {
+  Timer? _timer;
+  StreamSubscription<Position>? _gpsSub;
+  LatLngPoint? _lastPoint;
+
+  @override
+  WorkoutState build() => const WorkoutState();
+
+  List<SongModel> _buildBpmQueue(String sportMode) {
+    final allSongs = ref.read(songsProvider).value ?? [];
+    final withBpm = allSongs.where((s) => s.bpm != null).toList();
+
+    List<SongModel> filtered;
+    if (sportMode == 'Berjalan') {
+      filtered = withBpm.where((s) => s.bpm! >= 80 && s.bpm! <= 120).toList();
+    } else if (sportMode == 'Mendaki') {
+      filtered = withBpm.where((s) => s.bpm! < 80).toList();
+    } else {
+      filtered = withBpm.where((s) => s.bpm! >= 120).toList();
+    }
+    if (filtered.isEmpty) filtered = allSongs;
+    return filtered;
+  }
+
+  Future<bool> startWorkout(String sportMode) async {
+    final granted = await LocationService.instance.requestPermission();
+    if (!granted) {
+      state = state.copyWith(locationGranted: false);
+      return false;
+    }
+
+    final bpmQueue = _buildBpmQueue(sportMode);
+    if (bpmQueue.isNotEmpty) {
+      await ref.read(playerProvider.notifier).playSong(bpmQueue.first, bpmQueue);
+    }
+
+    _lastPoint = null;
+    _gpsSub = LocationService.instance.startTracking(
+      onPosition: (pos) {
+        final newPoint = LatLngPoint(pos.latitude, pos.longitude);
+        double addedKm = 0;
+        if (_lastPoint != null) {
+          addedKm = LocationService.haversineDistance(
+            _lastPoint!.lat, _lastPoint!.lng,
+            newPoint.lat, newPoint.lng,
+          );
+        }
+        _lastPoint = newPoint;
+        state = state.copyWith(
+          distanceKm: state.distanceKm + addedKm,
+          routePoints: [...state.routePoints, newPoint],
+        );
+      },
+    );
+
+    _startTimer();
+
+    state = WorkoutState(
+      sportMode: sportMode,
+      isRunning: true,
+      isPaused: false,
+      locationGranted: true,
+      elapsedSeconds: 0,
+      distanceKm: 0,
+      routePoints: const [],
+      songsPlayed: bpmQueue.isNotEmpty ? 1 : 0,
+    );
+    return true;
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!state.isPaused && state.isRunning) {
+        state = state.copyWith(elapsedSeconds: state.elapsedSeconds + 1);
+      }
+    });
+  }
+
+  void pauseWorkout() {
+    state = state.copyWith(isPaused: true);
+    final playerState = ref.read(playerProvider);
+    if (playerState.isPlaying) {
+      ref.read(playerProvider.notifier).togglePlay();
+    }
+  }
+
+  void resumeWorkout() {
+    state = state.copyWith(isPaused: false);
+    final playerState = ref.read(playerProvider);
+    if (!playerState.isPlaying) {
+      ref.read(playerProvider.notifier).togglePlay();
+    }
+  }
+
+  Future<WorkoutState> stopWorkout() async {
+    _timer?.cancel();
+    _timer = null;
+    await _gpsSub?.cancel();
+    _gpsSub = null;
+    final snapshot = state;
+    state = const WorkoutState();
+    return snapshot;
+  }
+
+  Future<void> saveActivity(WorkoutState snapshot) async {
+    final activity = snapshot.toActivity();
+    await DatabaseHelper.instance.insertActivity(activity.toMap());
+    ref.invalidate(activitiesProvider);
+  }
+}
+
+final workoutProvider =
+    NotifierProvider<WorkoutNotifier, WorkoutState>(WorkoutNotifier.new);
+
+// ─── Activities Provider ──────────────────────────────────────────────────────
+
+final activitiesProvider = FutureProvider<List<ActivityModel>>((ref) async {
+  final maps = await DatabaseHelper.instance.getAllActivities();
+  return maps.map(ActivityModel.fromMap).toList();
+});

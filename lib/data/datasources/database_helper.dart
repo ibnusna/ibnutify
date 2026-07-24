@@ -19,7 +19,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _createDB,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -46,6 +46,20 @@ class DatabaseHelper {
                 timestamp INTEGER NOT NULL,
                 duration_listened INTEGER,
                 FOREIGN KEY (song_id) REFERENCES songs (id) ON DELETE CASCADE
+              )
+            ''');
+          } catch (_) {}
+        }
+        if (oldVersion < 5) {
+          try {
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS activities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sport_mode TEXT NOT NULL,
+                duration INTEGER NOT NULL,
+                distance REAL NOT NULL,
+                route_points TEXT NOT NULL,
+                created_at TEXT NOT NULL
               )
             ''');
           } catch (_) {}
@@ -137,6 +151,35 @@ class DatabaseHelper {
         createdAt INTEGER NOT NULL
       )
     ''');
+
+    // Tabel Activities (Workout Mode)
+    await db.execute('''
+      CREATE TABLE activities (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sport_mode TEXT NOT NULL,
+        duration INTEGER NOT NULL,
+        distance REAL NOT NULL,
+        route_points TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  // ─── Activities CRUD ────────────────────────────────────────────────────
+
+  Future<int> insertActivity(Map<String, dynamic> data) async {
+    final db = await instance.database;
+    return await db.insert('activities', data);
+  }
+
+  Future<List<Map<String, dynamic>>> getAllActivities() async {
+    final db = await instance.database;
+    return await db.query('activities', orderBy: 'created_at DESC');
+  }
+
+  Future<void> deleteActivity(int id) async {
+    final db = await instance.database;
+    await db.delete('activities', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> clearAll() async {

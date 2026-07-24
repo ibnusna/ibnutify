@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>IbnuTify - Workout Active</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface": "#0e150e",
+                        "outline": "#869585",
+                        "on-tertiary-fixed": "#400009",
+                        "surface-container-lowest": "#091009",
+                        "background": "#0e150e",
+                        "surface-dim": "#0e150e",
+                        "secondary-container": "#4a4949",
+                        "error-container": "#93000a",
+                        "on-background": "#dde5d9",
+                        "on-secondary-container": "#bab8b7",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "surface-tint": "#53e076",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "secondary": "#c8c6c5",
+                        "on-surface-variant": "#bccbb9",
+                        "surface-bright": "#333b33",
+                        "on-primary-container": "#004118",
+                        "primary-fixed": "#72fe8f",
+                        "surface-container-high": "#242c24",
+                        "on-secondary-fixed-variant": "#474646",
+                        "surface-variant": "#2f372e",
+                        "surface-container-low": "#161d16",
+                        "on-surface": "#dde5d9",
+                        "on-tertiary-container": "#730a1b",
+                        "on-secondary": "#313030",
+                        "inverse-on-surface": "#2b322a",
+                        "tertiary-fixed-dim": "#ffb3b3",
+                        "secondary-fixed": "#e5e2e1",
+                        "tertiary-fixed": "#ffdad9",
+                        "on-primary-fixed-variant": "#005320",
+                        "surface-container": "#1a211a",
+                        "on-primary-fixed": "#002108",
+                        "on-error": "#690005",
+                        "inverse-primary": "#006e2d",
+                        "primary-fixed-dim": "#53e076",
+                        "tertiary": "#ffb3b3",
+                        "on-tertiary": "#680114",
+                        "primary": "#53e076",
+                        "inverse-surface": "#dde5d9",
+                        "on-primary": "#003914",
+                        "outline-variant": "#3d4a3d",
+                        "error": "#ffb4ab",
+                        "on-error-container": "#ffdad6",
+                        "primary-container": "#1db954",
+                        "on-tertiary-fixed-variant": "#881d28",
+                        "tertiary-container": "#ff767b",
+                        "surface-container-highest": "#2f372e"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "base": "4px",
+                        "lg": "24px",
+                        "xs": "8px",
+                        "xl": "32px",
+                        "margin": "16px",
+                        "sm": "12px",
+                        "md": "16px",
+                        "gutter": "16px",
+                        "safe": "env(safe-area-inset-bottom, 24px)"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Be Vietnam Pro", "sans-serif"],
+                        "headline-md": ["Be Vietnam Pro", "sans-serif"],
+                        "display-lg": ["Be Vietnam Pro", "sans-serif"],
+                        "title-sm": ["Be Vietnam Pro", "sans-serif"],
+                        "metadata": ["Be Vietnam Pro", "sans-serif"],
+                        "label-sm": ["Be Vietnam Pro", "sans-serif"]
+                    },
+                    "fontSize": {
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "display-xl": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "title-sm": ["16px", { "lineHeight": "24px", "fontWeight": "700" }],
+                        "metadata": ["11px", { "lineHeight": "14px", "fontWeight": "400" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Be Vietnam Pro', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .material-symbols-outlined.fill { font-variation-settings: 'FILL' 1; }
+        .animate-pulse-slow { animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .7; }
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface h-screen flex flex-col overflow-hidden antialiased">
+<!-- TopAppBar Shell (Hidden nav since this is an active task) -->
+<header class="fixed top-0 w-full z-50 bg-surface/95 backdrop-blur-md flex justify-between items-center px-margin h-16 bg-gradient-to-b from-primary/10 to-transparent">
+<button class="flex items-center justify-center p-2 rounded-full hover:bg-surface-variant transition-colors text-on-surface">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">directions_run</span>
+<span class="font-title-sm text-title-sm text-primary">Berlari</span>
+</div>
+<button class="flex items-center justify-center p-2 rounded-full hover:bg-surface-variant transition-colors text-on-surface">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 flex flex-col mt-16 px-margin pb-safe overflow-y-auto">
+<!-- Workout Stats -->
+<section class="flex flex-col items-center justify-center py-xl gap-sm">
+<div class="flex flex-col items-center">
+<span class="font-metadata text-metadata text-on-surface-variant uppercase tracking-widest">Time</span>
+<span class="font-display-lg text-[64px] font-extrabold text-on-surface leading-tight tracking-tighter">00:28:45</span>
+</div>
+<div class="w-full flex justify-around mt-lg bg-surface-container rounded-xl p-margin">
+<div class="flex flex-col items-center gap-1">
+<span class="font-metadata text-metadata text-on-surface-variant uppercase tracking-widest">Distance</span>
+<span class="font-headline-md text-headline-md text-on-surface">4.85 <span class="text-title-sm text-on-surface-variant">KM</span></span>
+</div>
+<div class="w-px bg-outline-variant"></div>
+<div class="flex flex-col items-center gap-1">
+<span class="font-metadata text-metadata text-on-surface-variant uppercase tracking-widest">Pace</span>
+<span class="font-headline-md text-headline-md text-on-surface">05'55"<span class="text-title-sm text-on-surface-variant">/km</span></span>
+</div>
+</div>
+</section>
+<!-- Live GPS Map Preview -->
+<section class="w-full h-48 rounded-xl overflow-hidden relative border border-outline-variant mt-sm">
+<img class="w-full h-full object-cover opacity-60" data-alt="A stylized, dark-mode satellite map view of a city park with a vibrant glowing green GPS route line illustrating a running path. The map uses deep blacks and dark grays, highlighting the route with a neon green stroke, reminiscent of a high-end fitness tracking application interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCV3Svrt9SyzoQ2Y2uS4t6O4K4pzlVtbHseRL2U0Z1UQELi1vokwkrU3EJRo4vQkza78R560yrDpkzyJpJx0wxeT1kxwH--x8og38noOWmwT_vHQopEf6ywAZ40UKb1lRIJin3UeqpIuZmzTFElVRIFOO-JKvV9uWfQ7vHadrrrc84BXxgnvussZM8sJ2B6rOdvjj9VNK4LbCcrCrLR_IoRQNEoaiOayInXORk88xeOQHOsGK3LtQT5E0A1i6ho2Zaq1hTaiWlrOxQ"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-high/80 to-transparent flex items-end p-sm">
+<div class="flex items-center gap-2 bg-surface/80 backdrop-blur rounded-full px-3 py-1">
+<div class="w-2 h-2 rounded-full bg-primary animate-pulse-slow"></div>
+<span class="font-label-sm text-label-sm text-on-surface">Live Tracking</span>
+</div>
+</div>
+</section>
+<!-- Spacer -->
+<div class="flex-1 min-h-[24px]"></div>
+<!-- Integrated Music Player (Pace Match) -->
+<section class="bg-surface-container-high rounded-2xl p-sm mb-lg shadow-lg flex items-center gap-md">
+<div class="w-14 h-14 rounded-lg bg-surface-variant overflow-hidden relative flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A high-contrast, moody album art cover featuring abstract geometric shapes in vibrant neon green and dark charcoal grey, suitable for a high-energy electronic dance music track. The aesthetic is sleek, modern, and slightly aggressive, matching an intense workout mood." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJW_FTMjODOVd9j1ASGftXKE8YzzXKVClEtGPCEIuSiSsWlb7LlU1ZsJ1i4o9oUNBx6h1MTqATcfPj1wXwyRc5P6y3u3HrEw2N2pCdT6bSE-DdtT7hXV_7ZWTM3FPQ4rLEEQFTyiH9fm5C841n3A7gFbzCz9AS1Q4zi2pQx84wAIVtoxOwtd76Zvso9_3J3p_iy_InQheZEkKS5qv7fuwVphSqtU3ROZGDJQAIuRYececTIiK_uZHM_ZOMx0bET0GdbR83UdJT93M"/>
+<div class="absolute bottom-1 right-1 bg-surface/80 rounded px-1">
+<span class="font-metadata text-metadata text-primary">128 BPM</span>
+</div>
+</div>
+<div class="flex-1 flex flex-col justify-center min-w-0">
+<div class="flex items-center gap-1 mb-0.5">
+<span class="material-symbols-outlined text-primary text-[14px]">speed</span>
+<span class="font-metadata text-metadata text-primary uppercase tracking-wider">Pace Match</span>
+</div>
+<span class="font-title-sm text-title-sm text-on-surface truncate">Track 1 - High Energy</span>
+<span class="font-body-md text-body-md text-on-surface-variant truncate text-sm">Ibnu Player Mix</span>
+</div>
+<div class="flex items-center gap-2 pr-2">
+<button class="p-2 text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined fill text-3xl">play_circle</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">skip_next</span>
+</button>
+</div>
+</section>
+<!-- Primary Action Buttons -->
+<section class="flex gap-4 mb-margin">
+<button class="flex-1 bg-surface-container-highest text-on-surface font-title-sm text-title-sm py-4 rounded-full flex justify-center items-center gap-2 hover:bg-surface-variant transition-colors border border-outline-variant">
+<span class="material-symbols-outlined">pause</span>
+                PAUSE
+            </button>
+<button class="flex-1 bg-primary text-on-primary font-title-sm text-title-sm py-4 rounded-full flex justify-center items-center gap-2 hover:opacity-90 transition-opacity font-bold">
+<span class="material-symbols-outlined">stop</span>
+                SELESAI
+            </button>
+</section>
+</main>
+</body></html>

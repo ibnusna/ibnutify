@@ -5,6 +5,7 @@ import '../../../core/utils/format_utils.dart';
 import '../../../data/models/song_model.dart';
 import '../../providers/app_providers.dart';
 import '../../screens/player/player_screen.dart';
+import '../../screens/workout/workout_history_screen.dart';
 import '../../widgets/common/song_artwork_widget.dart';
 import '../library/playlist_detail_screen.dart';
 
@@ -49,6 +50,32 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
+                // Workout icon [before bell]
+                GestureDetector(
+                  onTap: () => Navigator.of(context).push(
+                    PageRouteBuilder(
+                      pageBuilder: (_, __, ___) =>
+                          const WorkoutHistoryScreen(),
+                      transitionsBuilder: (_, animation, __, child) =>
+                          SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 1),
+                          end: Offset.zero,
+                        ).animate(CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutCubic)),
+                        child: child,
+                      ),
+                      transitionDuration: const Duration(milliseconds: 380),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.directions_run_rounded,
+                    color: AppColors.onSurfaceVariant,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
                 const Icon(Icons.history_rounded,
                     color: AppColors.onSurfaceVariant, size: 24),
                 const SizedBox(width: 16),

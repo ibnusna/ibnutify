@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Workout History - IbnuTify</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface": "#0e150e",
+                    "outline": "#869585",
+                    "on-tertiary-fixed": "#400009",
+                    "surface-container-lowest": "#091009",
+                    "background": "#0e150e",
+                    "surface-dim": "#0e150e",
+                    "secondary-container": "#4a4949",
+                    "error-container": "#93000a",
+                    "on-background": "#dde5d9",
+                    "on-secondary-container": "#bab8b7",
+                    "on-secondary-fixed": "#1c1b1b",
+                    "surface-tint": "#53e076",
+                    "secondary-fixed-dim": "#c8c6c5",
+                    "secondary": "#c8c6c5",
+                    "on-surface-variant": "#bccbb9",
+                    "surface-bright": "#333b33",
+                    "on-primary-container": "#004118",
+                    "primary-fixed": "#72fe8f",
+                    "surface-container-high": "#242c24",
+                    "on-secondary-fixed-variant": "#474646",
+                    "surface-variant": "#2f372e",
+                    "surface-container-low": "#161d16",
+                    "on-surface": "#dde5d9",
+                    "on-tertiary-container": "#730a1b",
+                    "on-secondary": "#313030",
+                    "inverse-on-surface": "#2b322a",
+                    "tertiary-fixed-dim": "#ffb3b3",
+                    "secondary-fixed": "#e5e2e1",
+                    "tertiary-fixed": "#ffdad9",
+                    "on-primary-fixed-variant": "#005320",
+                    "surface-container": "#1a211a",
+                    "on-primary-fixed": "#002108",
+                    "on-error": "#690005",
+                    "inverse-primary": "#006e2d",
+                    "primary-fixed-dim": "#53e076",
+                    "tertiary": "#ffb3b3",
+                    "on-tertiary": "#680114",
+                    "primary": "#53e076",
+                    "inverse-surface": "#dde5d9",
+                    "on-primary": "#003914",
+                    "outline-variant": "#3d4a3d",
+                    "error": "#ffb4ab",
+                    "on-error-container": "#ffdad6",
+                    "primary-container": "#1db954",
+                    "on-tertiary-fixed-variant": "#881d28",
+                    "tertiary-container": "#ff767b",
+                    "surface-container-highest": "#2f372e"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "base": "4px",
+                    "lg": "24px",
+                    "xs": "8px",
+                    "xl": "32px",
+                    "margin": "16px",
+                    "sm": "12px",
+                    "md": "16px",
+                    "gutter": "16px"
+            },
+            "fontFamily": {
+                    "body-md": ["Be Vietnam Pro", "sans-serif"],
+                    "headline-md": ["Be Vietnam Pro", "sans-serif"],
+                    "display-lg": ["Be Vietnam Pro", "sans-serif"],
+                    "title-sm": ["Be Vietnam Pro", "sans-serif"],
+                    "metadata": ["Be Vietnam Pro", "sans-serif"],
+                    "label-sm": ["Be Vietnam Pro", "sans-serif"]
+            },
+            "fontSize": {
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "display-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "title-sm": ["16px", {"lineHeight": "24px", "fontWeight": "700"}],
+                    "metadata": ["11px", {"lineHeight": "14px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "400"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md min-h-screen pb-24 antialiased selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar from JSON -->
+<header class="fixed top-0 w-full z-50 bg-surface dark:bg-surface flex justify-between items-center px-margin h-16 bg-gradient-to-b from-primary/10 to-transparent">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-variant flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity active:scale-95">
+<img alt="User profile picture" class="w-full h-full object-cover" data-alt="A macro photography shot of a sleek, dark-themed user profile avatar showing a silhouette illuminated by neon green rim lighting against a pitch-black background. Minimalist, high contrast, modern aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAwSFhEyK3Y5e7UHhrE49yJMaskofEY-H1z_636MB1-YVJWvhPXcN71M7hhsyRfRhoSEvIIUODolE83c_vdm8-J-l7uPIXbPJWHn8hMnj8kNiymj96FJRtqB5SzrWclBEdCI9cMTB5prmOyTcsFihQ-fvW0yJoT2umYjXC8VGy54-ve_LG9baRrUK24Cb5DWNO0G2R5l3V_t95kAo7y5FPV3VWtQ_NvFVBDsAQWp_p9eODTRRPdMnsIPKjadq-uC4saBdW19US3Vao"/>
+</div>
+<h1 class="font-headline-md text-headline-md font-bold text-on-surface dark:text-on-surface">IbnuTify</h1>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant transition-colors active:scale-95 text-primary dark:text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">fitness_center</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="pt-24 px-margin max-w-2xl mx-auto">
+<!-- Header Section -->
+<section class="flex items-center justify-between mb-xl">
+<h2 class="font-display-lg text-display-lg text-on-surface">Riwayat Olahraga</h2>
+<button class="bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-title-sm text-title-sm px-4 py-2 rounded-full flex items-center gap-2 transition-all active:scale-95">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                Baru
+            </button>
+</section>
+<!-- Filter Chips -->
+<section class="flex gap-3 mb-8 overflow-x-auto no-scrollbar py-1">
+<button class="px-5 py-2 rounded-full bg-on-surface text-surface font-title-sm text-title-sm whitespace-nowrap active:scale-95 transition-transform">
+                Semua
+            </button>
+<button class="px-5 py-2 rounded-full bg-surface-container-high hover:bg-surface-variant text-on-surface-variant font-title-sm text-title-sm whitespace-nowrap border border-outline-variant transition-colors active:scale-95">
+                🏃 Lari
+            </button>
+<button class="px-5 py-2 rounded-full bg-surface-container-high hover:bg-surface-variant text-on-surface-variant font-title-sm text-title-sm whitespace-nowrap border border-outline-variant transition-colors active:scale-95">
+                🚴 Sepeda
+            </button>
+</section>
+<!-- Activity List -->
+<section class="flex flex-col gap-sm relative">
+<!-- Subtle gradient fade behind list -->
+<div class="absolute -top-10 left-0 w-full h-32 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none -z-10 rounded-t-3xl"></div>
+<!-- Item 1 -->
+<div class="group flex flex-col bg-surface-container-low hover:bg-surface-container transition-colors rounded-lg p-md border border-outline-variant/30 cursor-pointer">
+<div class="flex items-start justify-between mb-3">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center text-xl">
+                            🏃
+                        </div>
+<div>
+<h3 class="font-title-sm text-title-sm text-on-surface group-hover:text-primary transition-colors">Berlari</h3>
+<p class="font-metadata text-metadata text-on-surface-variant mt-1">Hari Ini, 07:30</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-on-surface transition-colors">chevron_right</span>
+</div>
+<div class="grid grid-cols-3 gap-2 bg-surface-dim/50 rounded-lg p-3 border border-outline-variant/20">
+<div class="flex flex-col">
+<span class="font-metadata text-metadata text-on-surface-variant uppercase tracking-wider">Jarak</span>
+<span class="font-title-sm text-title-sm text-on-surface mt-1">5.25 KM</span>
+</div>
+<div class="flex flex-col">
+<span class="font-metadata text-metadata text-on-surface-variant uppercase tracking-wider">Waktu</span>
+<span class="font-title-sm text-title-sm text-on-surface mt-1">00:32:15</span>
+</div>
+<div class="flex flex-col">
+<span class="font-metadata text-metadata text-on-surface-variant uppercase tracking-wider">Pace</span>
+<span class="font-title-sm text-title-sm text-on-surface mt-1">06'08"/km</span>
+</div>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="group flex flex-col bg-surface-container-low hover:bg-surface-container transition-colors rounded-lg p-md border border-outline-variant/30 cursor-pointer">
+<div class="flex items-start justify-between mb-3">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center text-xl">
+                            🚴
+                        </div>
+<div>
+<h3 class="font-title-sm text-title-sm text-on-surface group-hover:text-primary transition-colors">Sepeda</h3>
+<p class="font-metadata text-metadata text-on-surface-variant mt-1">Kemarin, 16:15</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-on-surface transition-colors">chevron_right</span>
+</div>
+<div class="grid grid-cols-3 gap-2 bg-surface-dim/50 rounded-lg p-3 border border-outline-variant/20">
+<div class="flex flex-col">
+<span class="font-metadata text-metadata text-on-surface-variant uppercase tracking-wider">Jarak</span>
+<span class="font-title-sm text-title-sm text-on-surface mt-1">12.4 KM</span>
+</div>
+<div class="flex flex-col">
+<span class="font-metadata text-metadata text-on-surface-variant uppercase tracking-wider">Waktu</span>
+<span class="font-title-sm text-title-sm text-on-surface mt-1">00:45:00</span>
+</div>
+<div class="flex flex-col">
+<span class="font-metadata text-metadata text-on-surface-variant uppercase tracking-wider">Kecepatan</span>
+<span class="font-title-sm text-title-sm text-on-surface mt-1">16.5 km/h</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar from JSON -->
+<nav class="fixed bottom-0 w-full z-50 border-t border-outline-variant flex justify-around items-center pt-2 pb-safe w-full bg-surface-container-low/95 backdrop-blur-md md:hidden pb-6">
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface transition-colors active:scale-90 transition-transform w-16 gap-1">
+<span class="material-symbols-outlined text-[24px]">home</span>
+<span class="font-label-sm text-label-sm">Home</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface transition-colors active:scale-90 transition-transform w-16 gap-1">
+<span class="material-symbols-outlined text-[24px]">search</span>
+<span class="font-label-sm text-label-sm">Search</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface transition-colors active:scale-90 transition-transform w-16 gap-1">
+<span class="material-symbols-outlined text-[24px]">library_music</span>
+<span class="font-label-sm text-label-sm">Your Library</span>
+</button>
+</nav>
+</body></html>
