@@ -58,24 +58,27 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
     if (currentSong == null) return const SizedBox.shrink();
 
     return GestureDetector(
-      onTap: () => Navigator.of(context).push(
-        PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const PlayerScreen(),
-          transitionsBuilder: (_, animation, __, child) {
-            return SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 1),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-              )),
-              child: child,
-            );
-          },
-          transitionDuration: const Duration(milliseconds: 350),
-        ),
-      ),
+      onTap: () {
+        FocusManager.instance.primaryFocus?.unfocus();
+        Navigator.of(context).push(
+          PageRouteBuilder(
+            pageBuilder: (_, __, ___) => const PlayerScreen(),
+            transitionsBuilder: (_, animation, __, child) {
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 1),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
+                )),
+                child: child,
+              );
+            },
+            transitionDuration: const Duration(milliseconds: 350),
+          ),
+        );
+      },
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, child) {

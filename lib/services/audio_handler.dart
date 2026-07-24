@@ -1,10 +1,11 @@
 import 'dart:io';
 import 'dart:async';
 import 'dart:typed_data';
-import 'package:audio_service/audio_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:ibnutify/data/datasources/music_local_datasource.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:ibnutify/services/smart_shuffle_order.dart';
 
 /// AudioHandler yang menjembatani just_audio dengan sistem notifikasi media Android.
 ///
@@ -29,15 +30,29 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
   );
   ConcatenatingAudioSource? _audioSource;
   final Map<int, String> _artworksCache = {};
+  final _localDatasource = MusicLocalDatasource();
   
-  SmartShuffleOrder _smartShuffleOrder = SmartShuffleOrder();
+  // Tracking state
+  int? _trackingSongId;
+  int _durationPlayedSecs = 0;
+  int _totalDurationSecs = 0;
+  bool _hasLoggedCurrentSong = false;
+  int _lastPositionSecs = 0;
 
   int _manualQueueCount = 0;
   int _lastIndex = -1;
 
   IbnuTifyAudioHandler() {
-    // Pipe playbackState (seekbar, controls) ke audio_service
-    _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
+    // Synchronize playbackState (seekbar, controls, play/pause toggle) with audio_service
+    _player.playbackEventStream.listen((event) => _broadcastState(event));
+    _player.playerStateStream.listen((_) => _broadcastState());
+
+    // Update mediaItem duration as soon as just_audio resolves audio duration
+    _player.durationStream.listen((dur) {
+      if (dur != null && mediaItem.value != null && mediaItem.value!.duration != dur) {
+        mediaItem.add(mediaItem.value!.copyWith(duration: dur));
+      }
+    });
 
     // currentIndexStream → sole authority untuk update mediaItem
     _player.currentIndexStream.listen(_onIndexChanged);
@@ -55,6 +70,17 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
           return item;
         }).toList(),
       );
+    });
+
+    _player.positionStream.listen((position) {
+      if (_trackingSongId != null && !_hasLoggedCurrentSong) {
+        final posSecs = position.inSeconds;
+        // Simple accumulator to handle seeks gracefully
+        if (posSecs > _lastPositionSecs && (posSecs - _lastPositionSecs) < 2) {
+           _durationPlayedSecs++;
+        }
+        _lastPositionSecs = posSecs;
+      }
     });
   }
 
@@ -78,6 +104,7 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
       item = item.copyWith(artUri: Uri.file(_artworksCache[songId]!));
     }
     mediaItem.add(item);
+    _handleSongChangeForTracking(item);
   }
 
   void _forceEmitFromSources(int index, List<UriAudioSource> sources) {
@@ -89,6 +116,7 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
         item = item.copyWith(artUri: Uri.file(_artworksCache[songId]!));
       }
       mediaItem.add(item);
+      _handleSongChangeForTracking(item);
     }
   }
 
@@ -102,6 +130,7 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
 
   @override
   Future<void> stop() async {
+    _recordPlayLogIfNeeded();
     await _player.stop();
     return super.stop();
   }
@@ -112,19 +141,16 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
   @override
   Future<void> skipToNext() async {
     await _player.seekToNext();
-    _onIndexChanged(_player.currentIndex);
   }
 
   @override
   Future<void> skipToPrevious() async {
     await _player.seekToPrevious();
-    _onIndexChanged(_player.currentIndex);
   }
 
   @override
   Future<void> skipToQueueItem(int index) async {
     await _player.seek(Duration.zero, index: index);
-    _onIndexChanged(index);
     await _player.play();
   }
 
@@ -149,16 +175,6 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
 
   // ─── Queue Management ──────────────────────────────────────────────────────
 
-  /// Memulai pemutaran queue baru.
-  ///
-  /// STRATEGI NOTIFIKASI STABIL:
-  /// 1. emit mediaItem SEBELUM setAudioSource → notifikasi langsung update
-  /// 2. setAudioSource + play() → audio mulai
-  /// 3. emit lagi SETELAH setAudioSource → pastikan index ter-resolved
-  /// 4. artwork diupdate asinkron di background (tidak memblokir playback)
-  ///
-  /// [items] harus berisi title, artist, duration, extras['uri'], extras['songId'].
-  /// [artBytesMap] adalah opsional: songId → JPEG bytes untuk update art asinkron.
   Future<void> playQueue(
     List<MediaItem> items, {
     int initialIndex = 0,
@@ -167,10 +183,6 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
     _manualQueueCount = 0;
     _lastIndex = initialIndex;
 
-
-    // ── Langkah 1: Emit mediaItem SEGERA sebelum audio dimuat ───────────────
-    // Ini yang memastikan notifikasi menampilkan metadata yang benar
-    // bahkan sebelum just_audio selesai loading.
     if (initialIndex < items.length) {
       var initialItem = items[initialIndex];
       final songId = initialItem.extras?['songId'] as int?;
@@ -181,7 +193,6 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
     }
     queue.add(items);
 
-    // ── Langkah 2: Bangun AudioSources ──────────────────────────────────────
     final sources = items.map((item) {
       return AudioSource.uri(
         Uri.parse(item.extras!['uri'] as String),
@@ -189,40 +200,31 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
       );
     }).toList();
     
-    _smartShuffleOrder = SmartShuffleOrder();
-
     _audioSource = ConcatenatingAudioSource(
       children: sources,
-      shuffleOrder: _smartShuffleOrder,
     );
 
-    // ── Langkah 3: Set source + play ─────────────────────────────────────────
     await _player.setAudioSource(
       _audioSource!,
       initialIndex: initialIndex,
       initialPosition: Duration.zero,
     );
 
-    // ── Langkah 4: Force-emit lagi setelah sequence settled ──────────────────
     _forceEmitFromSources(initialIndex, sources);
 
     await _player.play();
 
-    // ── Langkah 5: Update artwork di background (non-blocking) ───────────────
     if (artBytesMap != null && artBytesMap.isNotEmpty) {
       _updateArtworkInBackground(artBytesMap);
     }
   }
 
-  /// Menyimpan artwork ke temp files dan meng-patch MediaItem di queue.
-  /// Berjalan asinkron — audio tidak terganggu.
   void _updateArtworkInBackground(Map<int, Uint8List> artBytesMap) async {
     try {
       final dir = await getTemporaryDirectory();
       final src = _audioSource;
       if (src == null) return;
 
-      // Tulis semua file artwork yang belum ada
       final pathMap = <int, String>{};
       for (final entry in artBytesMap.entries) {
         final file = File('${dir.path}/ibnutify_art_${entry.key}.jpg');
@@ -231,11 +233,10 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
             await file.writeAsBytes(entry.value, flush: true);
           }
           pathMap[entry.key] = file.path;
-          _artworksCache[entry.key] = file.path; // Update global cache
+          _artworksCache[entry.key] = file.path;
         } catch (_) {}
       }
 
-      // Patch queue items dengan artUri
       final currentQueue = List<MediaItem>.from(queue.value);
       bool queueChanged = false;
 
@@ -245,13 +246,12 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
         if (songId == null) continue;
         final path = pathMap[songId];
         if (path == null) continue;
-        if (item.artUri?.toFilePath() == path) continue; // already updated
+        if (item.artUri?.toFilePath() == path) continue;
 
         final updated = item.copyWith(artUri: Uri.file(path));
         currentQueue[i] = updated;
         queueChanged = true;
 
-        // Re-emit mediaItem jika ini lagu yang sedang diputar
         final curIdx = _player.currentIndex;
         if (curIdx == i) {
           mediaItem.add(updated);
@@ -259,13 +259,11 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
       }
 
       if (queueChanged) queue.add(currentQueue);
-    } catch (_) {
-      // Artwork update gagal — text metadata tetap tampil, tidak crash
-    }
+    } catch (_) {}
   }
 
-  /// Menghapus queue dan menghentikan pemutaran.
   Future<void> clearQueue() async {
+    _recordPlayLogIfNeeded();
     await _player.stop();
     _audioSource = null;
     _manualQueueCount = 0;
@@ -275,8 +273,6 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
     mediaItem.add(null);
   }
 
-  /// Memasukkan lagu ke antrean (Add to Queue) setelah lagu yang sedang diputar
-  /// dan lagu-lagu antrean manual lainnya.
   Future<void> addNextToQueue(MediaItem item) async {
     final src = _audioSource;
     if (src == null) return;
@@ -297,26 +293,72 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
     _manualQueueCount++;
   }
 
-  /// Memindahkan item queue dari [oldIndex] ke [newIndex].
   Future<void> reorderQueue(int oldIndex, int newIndex) async {
     final src = _audioSource;
     if (src == null) return;
+    
+    // Perform reorder on concatenating audio source
     await src.move(oldIndex, newIndex);
-    // sequenceStateStream akan fire dan update queue BehaviorSubject otomatis.
-  }
-  
-  /// Mengupdate indeks shuffle secara dinamis untuk injeksi Smart Shuffle.
-  Future<void> updateShuffleIndices(List<int> indices) async {
-    _smartShuffleOrder.updateIndices(indices);
-    // Instruct just_audio to apply the new shuffle order
-    await _player.shuffle();
+    
+    // Update queue state with casted UriAudioSource elements
+    queue.add(src.children.map((s) => (s as UriAudioSource).tag as MediaItem).toList());
   }
 
-  // ─── Stream Transformation ─────────────────────────────────────────────────
+  Future<void> injectCustomQueue(List<int> optimizedIndices) async {
+    final src = _audioSource;
+    if (src == null || optimizedIndices.isEmpty) return;
+    
+    final currentChildren = List<AudioSource>.from(src.children);
+    final newChildren = <AudioSource>[];
+    for (int idx in optimizedIndices) {
+      if (idx >= 0 && idx < currentChildren.length) {
+        newChildren.add(currentChildren[idx]);
+      }
+    }
+    
+    final position = _player.position;
+    final wasPlaying = _player.playing;
+    
+    _audioSource = ConcatenatingAudioSource(children: newChildren);
+    
+    await _player.setAudioSource(
+      _audioSource!,
+      initialIndex: 0,
+      initialPosition: position,
+    );
+    
+    if (wasPlaying) {
+      _player.play();
+    }
+    
+    queue.add(newChildren.map((s) => (s as UriAudioSource).tag as MediaItem).toList());
+  }
 
-  PlaybackState _transformEvent(PlaybackEvent event) {
+  // ─── Play Tracking Logic ──────────────────────────────────────────────────
+
+  void _handleSongChangeForTracking(MediaItem newItem) {
+    _recordPlayLogIfNeeded();
+
+    final songId = newItem.extras?['songId'] as int?;
+    _trackingSongId = songId;
+    _durationPlayedSecs = 0;
+    _lastPositionSecs = 0;
+    _hasLoggedCurrentSong = false;
+    _totalDurationSecs = newItem.duration?.inSeconds ?? 0;
+  }
+
+  void _recordPlayLogIfNeeded() {
+    if (_trackingSongId == null || _hasLoggedCurrentSong || _totalDurationSecs <= 0) return;
+    
+    if (_durationPlayedSecs > 0) {
+      _localDatasource.recordPlayLog(_trackingSongId!, _durationPlayedSecs, _totalDurationSecs);
+    }
+    _hasLoggedCurrentSong = true;
+  }
+
+  void _broadcastState([PlaybackEvent? event]) {
     final playing = _player.playing;
-    return PlaybackState(
+    final state = PlaybackState(
       controls: [
         MediaControl.skipToPrevious,
         playing ? MediaControl.pause : MediaControl.play,
@@ -326,6 +368,11 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
         MediaAction.seek,
         MediaAction.seekForward,
         MediaAction.seekBackward,
+        MediaAction.play,
+        MediaAction.pause,
+        MediaAction.playPause,
+        MediaAction.skipToNext,
+        MediaAction.skipToPrevious,
       },
       androidCompactActionIndices: const [0, 1, 2],
       processingState: const {
@@ -339,14 +386,13 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
       updatePosition: _player.position,
       bufferedPosition: _player.bufferedPosition,
       speed: _player.speed,
-      queueIndex: event.currentIndex,
+      queueIndex: event?.currentIndex ?? _player.currentIndex,
     );
+    playbackState.add(state);
   }
 
   // ─── Getters ────────────────────────────────────────────────────────────────
 
-  /// Public entry point for artwork updates from PlayerNotifier.
-  /// Delegates to [_updateArtworkInBackground].
   void updateArtwork(Map<int, Uint8List> artBytesMap) {
     _updateArtworkInBackground(artBytesMap);
   }
@@ -356,8 +402,6 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
   Stream<Duration?> get durationStream => _player.durationStream;
 
   List<MediaItem> get currentQueueItems {
-    final state = _player.sequenceState;
-    if (state == null) return [];
-    return state.effectiveSequence.map((s) => s.tag as MediaItem).toList();
+    return queue.value;
   }
 }

@@ -146,4 +146,40 @@ class SongModel {
       completionCount: completionCount ?? this.completionCount,
     );
   }
+
+  /// Categorize song into main genres dynamically
+  String get computedGenre {
+    final lowerTitle = title.toLowerCase();
+    final lowerArtist = artist.toLowerCase();
+    final lowerAlbum = album.toLowerCase();
+    final combined = '$lowerTitle $lowerArtist $lowerAlbum';
+
+    // 1. Direct metadata match
+    if (combined.contains('jazz') || combined.contains('blues') || combined.contains('soul')) return 'Jazz';
+    if (combined.contains('rock') || combined.contains('metal') || combined.contains('punk')) return 'Rock';
+    if (combined.contains('hip hop') || combined.contains('hip-hop') || combined.contains('rap') || combined.contains('trap')) return 'Hip Hop';
+    if (combined.contains('electronic') || combined.contains('edm') || combined.contains('techno') || combined.contains('remix')) return 'Electronic';
+    if (combined.contains('indie') || combined.contains('folk') || combined.contains('acoustic')) return 'Indie';
+    if (combined.contains('pop')) return 'Pop';
+
+    // 2. Audio features classification
+    if (bpm != null && brightness != null && percussiveness != null) {
+      if (percussiveness! > 0.22 && bpm! > 120) return 'Electronic';
+      if (percussiveness! > 0.18) return 'Hip Hop';
+      if (brightness! > 2400) return 'Rock';
+      if (percussiveness! < 0.12 && bpm! < 105) return 'Jazz';
+      if (bpm! < 115) return 'Indie';
+      return 'Pop';
+    }
+
+    // 3. Cluster ID mapping fallback
+    if (clusterId != null) {
+      final genres = ['Pop', 'Rock', 'Hip Hop', 'Electronic', 'Indie', 'Jazz', 'Pop'];
+      return genres[clusterId! % genres.length];
+    }
+
+    // 4. Stable Hash fallback
+    final genres = ['Pop', 'Rock', 'Hip Hop', 'Electronic', 'Indie', 'Jazz'];
+    return genres[id.abs() % genres.length];
+  }
 }

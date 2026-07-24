@@ -229,7 +229,42 @@ class MusicLocalDatasource {
       where: 'title LIKE ? OR artist LIKE ? OR album LIKE ?',
       whereArgs: ['%$query%', '%$query%', '%$query%'],
     );
-    return maps.map((e) => SongModel.fromMap(e)).toList();
+    final results = maps.map((e) => SongModel.fromMap(e)).toList();
+    
+    final q = query.toLowerCase();
+    results.sort((a, b) {
+      int scoreA = 0;
+      int scoreB = 0;
+      
+      final tA = a.title.toLowerCase();
+      final tB = b.title.toLowerCase();
+      final artA = a.artist.toLowerCase();
+      final artB = b.artist.toLowerCase();
+      final albA = a.album.toLowerCase();
+      final albB = b.album.toLowerCase();
+      
+      if (tA == q) scoreA += 100;
+      if (tB == q) scoreB += 100;
+      
+      if (tA.startsWith(q)) scoreA += 50;
+      if (tB.startsWith(q)) scoreB += 50;
+      
+      if (tA.contains(q)) scoreA += 30;
+      if (tB.contains(q)) scoreB += 30;
+      
+      if (artA == q) scoreA += 40;
+      if (artB == q) scoreB += 40;
+      
+      if (artA.contains(q)) scoreA += 20;
+      if (artB.contains(q)) scoreB += 20;
+      
+      if (albA.contains(q)) scoreA += 10;
+      if (albB.contains(q)) scoreB += 10;
+      
+      return scoreB.compareTo(scoreA);
+    });
+    
+    return results;
   }
 
   // ─── PLAY TRACKING (SMART SCORING) ────────────────────────────────────────

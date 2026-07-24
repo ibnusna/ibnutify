@@ -189,8 +189,6 @@ class PlayerState {
 
 class PlayerNotifier extends Notifier<PlayerState> {
   int? _trackingId;
-  Duration _lastDur = Duration.zero;
-  bool _playLogRecorded = false;
 
   @override
   PlayerState build() {
@@ -203,7 +201,6 @@ class PlayerNotifier extends Notifier<PlayerState> {
     handler.durationStream.listen((dur) {
       if (dur != null) {
         state = state.copyWith(duration: dur);
-        _lastDur = dur;
       }
     });
 
@@ -215,12 +212,8 @@ class PlayerNotifier extends Notifier<PlayerState> {
       if (item != null) {
         final songId = item.extras?['songId'] as int?;
         if (songId != null) {
-          // Log current song before switching if it was tracking
-          _recordPlayLogIfNeeded();
-
           // Reset tracking for new song
           _trackingId = songId;
-          _playLogRecorded = false;
           _syncCurrentSongFromCache(songId);
         }
       }
@@ -244,22 +237,6 @@ class PlayerNotifier extends Notifier<PlayerState> {
     if (found != null) {
       state = state.copyWith(currentSong: found);
     }
-  }
-
-  void _recordPlayLogIfNeeded() {
-    if (_trackingId == null || _playLogRecorded || _lastDur.inMilliseconds <= 0) return;
-    
-    // We only record log when song finishes or user skips (changes song)
-    final repo = ref.read(musicRepositoryProvider);
-    final playedSecs = state.position.inSeconds;
-    final totalSecs = _lastDur.inSeconds;
-    
-    repo.recordPlayLog(_trackingId!, playedSecs, totalSecs);
-    _playLogRecorded = true;
-    
-    // Refresh dependencies implicitly
-    ref.invalidate(recentlyPlayedProvider);
-    ref.invalidate(topSongsProvider);
   }
 
   Future<void> playSong(SongModel song, List<SongModel> queue) async {
@@ -286,7 +263,6 @@ class PlayerNotifier extends Notifier<PlayerState> {
 
     await repo.incrementPlayCount(song.id);
     _trackingId = song.id;
-    _playLogRecorded = false;
 
     state = state.copyWith(
       currentSong: song,
@@ -295,6 +271,57 @@ class PlayerNotifier extends Notifier<PlayerState> {
 
     // Update artwork sisa queue di background.
     _fetchAndSendArtwork(queue, handler);
+  }
+
+  Future<void> playFromSearch(SongModel song) async {
+    final allSongs = ref.read(songsProvider).value ?? [];
+    
+    // 1. Separate same artist and other artists
+    final sameArtist = allSongs
+        .where((s) =>
+            s.id != song.id &&
+            s.artist.toLowerCase() == song.artist.toLowerCase())
+        .toList();
+        
+    final otherArtists = allSongs
+        .where((s) =>
+            s.artist.toLowerCase() != song.artist.toLowerCase())
+        .toList();
+
+    final repo = ref.read(musicRepositoryProvider);
+    final recentLogs = await repo.getListeningHistory24h();
+
+    // 2. Select at most 1 song from same artist
+    SongModel? chosenSameArtist;
+    if (sameArtist.isNotEmpty) {
+      final sameIndices = await SmartShuffleService.computeSmartShuffleIndices(
+        sameArtist,
+        recentLogs,
+        null,
+      );
+      if (sameIndices.isNotEmpty) {
+        chosenSameArtist = sameArtist[sameIndices.first];
+      }
+    }
+
+    // 3. Compute Smart Shuffle for other artists
+    final otherIndices = await SmartShuffleService.computeSmartShuffleIndices(
+      otherArtists,
+      recentLogs,
+      null,
+    );
+    final sortedOthers = otherIndices.map((idx) => otherArtists[idx]).toList();
+
+    // 4. Build final queue
+    final finalQueue = <SongModel>[song];
+    if (chosenSameArtist != null) {
+      finalQueue.add(chosenSameArtist);
+    }
+    finalQueue.addAll(sortedOthers);
+
+    // 5. Play queue and enable shuffle mode visually
+    await playSong(song, finalQueue);
+    state = state.copyWith(isShuffle: true);
   }
 
   void _fetchAndSendArtwork(
@@ -341,14 +368,12 @@ class PlayerNotifier extends Notifier<PlayerState> {
 
   Future<void> nextTrack() async {
     final handler = ref.read(audioHandlerProvider);
-    _recordPlayLogIfNeeded();
     await handler.skipToNext();
     _pushArtworkForCurrentSong(handler);
   }
 
   Future<void> previousTrack() async {
     final handler = ref.read(audioHandlerProvider);
-    _recordPlayLogIfNeeded();
     await handler.skipToPrevious();
     _pushArtworkForCurrentSong(handler);
   }
@@ -389,14 +414,10 @@ class PlayerNotifier extends Notifier<PlayerState> {
         state.currentSong?.id,
       );
       
-      await handler.updateShuffleIndices(newIndices);
+      await handler.injectCustomQueue(newIndices);
+    } else if (!newShuffle) {
+      // Logic for disabling shuffle would involve restoring original queue order if needed.
     }
-
-    await handler.setShuffleMode(
-      newShuffle
-          ? AudioServiceShuffleMode.all
-          : AudioServiceShuffleMode.none,
-    );
 
     final updatedQueueItems = handler.currentQueueItems;
     final allSongs = ref.read(songsProvider).value ?? [];
@@ -423,7 +444,6 @@ class PlayerNotifier extends Notifier<PlayerState> {
 
   Future<void> clearQueue() async {
     final handler = ref.read(audioHandlerProvider);
-    _recordPlayLogIfNeeded();
     await handler.clearQueue();
     state = state.copyWith(
       queue: const [],
@@ -433,7 +453,6 @@ class PlayerNotifier extends Notifier<PlayerState> {
       duration: Duration.zero,
     );
     _trackingId = null;
-    _playLogRecorded = false;
   }
 
   Future<void> addToQueue(SongModel song) async {
@@ -535,10 +554,27 @@ class SearchNotifier extends Notifier<String> {
 final searchQueryProvider =
     NotifierProvider<SearchNotifier, String>(SearchNotifier.new);
 
+final selectedGenreProvider = StateProvider<String?>((ref) => null);
+
+final selectedSearchCategoryProvider = StateProvider<String>((ref) => 'All');
+
+final genreFilteredSongsProvider = Provider<List<SongModel>>((ref) {
+  final genre = ref.watch(selectedGenreProvider);
+  final songsAsync = ref.watch(songsProvider);
+  final songs = songsAsync.value ?? [];
+  if (genre == null || genre.isEmpty) return songs;
+  return songs.where((s) => s.computedGenre.toLowerCase() == genre.toLowerCase()).toList();
+});
+
 final searchResultsProvider = FutureProvider<List<SongModel>>((ref) async {
   final query = ref.watch(searchQueryProvider);
   final repo = ref.watch(musicRepositoryProvider);
-  return await repo.searchSongs(query);
+  final songs = await repo.searchSongs(query);
+  final genre = ref.watch(selectedGenreProvider);
+  if (genre != null && genre.isNotEmpty) {
+    return songs.where((s) => s.computedGenre.toLowerCase() == genre.toLowerCase()).toList();
+  }
+  return songs;
 });
 
 // ─── AI Moods State ───────────────────────────────────────────────────────

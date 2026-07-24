@@ -13,6 +13,7 @@ class SongListTile extends ConsumerWidget {
   final List<SongModel> queue;
   final bool showDuration;
   final Widget? trailing;
+  final VoidCallback? onTap;
 
   const SongListTile({
     super.key,
@@ -20,6 +21,7 @@ class SongListTile extends ConsumerWidget {
     required this.queue,
     this.showDuration = true,
     this.trailing,
+    this.onTap,
   });
 
   @override
@@ -29,7 +31,8 @@ class SongListTile extends ConsumerWidget {
     final isCurrentSong = currentSong?.id == song.id;
 
     return InkWell(
-      onTap: () {
+      onTap: onTap ?? () {
+        FocusManager.instance.primaryFocus?.unfocus();
         ref.read(playerProvider.notifier).playSong(song, queue);
         Navigator.of(context).push(
           PageRouteBuilder(
