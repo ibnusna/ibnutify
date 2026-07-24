@@ -360,7 +360,7 @@ class _WorkoutActiveScreenState extends ConsumerState<WorkoutActiveScreen>
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
-                                      workout.avgPace,
+                                      workout.currentPace,
                                       style: const TextStyle(
                                         color: AppColors.onSurface,
                                         fontSize: 22,
@@ -417,6 +417,20 @@ class _WorkoutActiveScreenState extends ConsumerState<WorkoutActiveScreen>
                                                 fontSize: 12,
                                               ),
                                             ),
+                                            if (!_locationDenied && workout.gpsAccuracy > 0)
+                                              Padding(
+                                                padding: const EdgeInsets.only(top: 4),
+                                                child: Text(
+                                                  'Akurasi: ${workout.gpsAccuracy.toStringAsFixed(0)}m',
+                                                  style: TextStyle(
+                                                    color: workout.gpsAccuracy <= 15
+                                                        ? AppColors.primary
+                                                        : Colors.orangeAccent,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ),
                                           ],
                                         ),
                                       ),
@@ -444,9 +458,13 @@ class _WorkoutActiveScreenState extends ConsumerState<WorkoutActiveScreen>
                                       Text(
                                         _locationDenied
                                             ? 'GPS Nonaktif'
-                                            : 'Live Tracking',
-                                        style: const TextStyle(
-                                          color: AppColors.onSurface,
+                                            : workout.gpsAccuracy > 0
+                                                ? 'Live • ${workout.gpsAccuracy.toStringAsFixed(0)}m'
+                                                : 'Live Tracking',
+                                        style: TextStyle(
+                                          color: workout.gpsAccuracy > 25
+                                              ? Colors.orangeAccent
+                                              : AppColors.onSurface,
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,
                                         ),

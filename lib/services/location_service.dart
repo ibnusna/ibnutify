@@ -33,9 +33,11 @@ class LocationService {
   StreamSubscription<Position> startTracking({
     required void Function(Position position) onPosition,
   }) {
+    // distanceFilter = 0 agar setiap update GPS diterima termasuk data speed
+    // Filtering noise dilakukan di WorkoutNotifier berdasarkan accuracy
     const settings = LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 5, // minimum 5 meter movement sebelum update
+      accuracy: LocationAccuracy.bestForNavigation,
+      distanceFilter: 0,
     );
     _subscription = Geolocator.getPositionStream(locationSettings: settings)
         .listen(onPosition);

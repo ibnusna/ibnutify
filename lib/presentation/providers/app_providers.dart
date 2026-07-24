@@ -1247,6 +1247,10 @@ class WorkoutState {
   final bool isPaused;
   final bool locationGranted;
   final int songsPlayed;
+  /// Kecepatan saat ini dalam m/s dari GPS Doppler (lebih akurat dari distance/time)
+  final double currentSpeedMs;
+  /// Akurasi GPS saat ini dalam meter
+  final double gpsAccuracy;
 
   const WorkoutState({
     this.sportMode = '',
@@ -1257,6 +1261,8 @@ class WorkoutState {
     this.isPaused = false,
     this.locationGranted = false,
     this.songsPlayed = 0,
+    this.currentSpeedMs = 0.0,
+    this.gpsAccuracy = 0.0,
   });
 
   WorkoutState copyWith({
@@ -1268,6 +1274,8 @@ class WorkoutState {
     bool? isPaused,
     bool? locationGranted,
     int? songsPlayed,
+    double? currentSpeedMs,
+    double? gpsAccuracy,
   }) =>
       WorkoutState(
         sportMode: sportMode ?? this.sportMode,
@@ -1278,10 +1286,32 @@ class WorkoutState {
         isPaused: isPaused ?? this.isPaused,
         locationGranted: locationGranted ?? this.locationGranted,
         songsPlayed: songsPlayed ?? this.songsPlayed,
+        currentSpeedMs: currentSpeedMs ?? this.currentSpeedMs,
+        gpsAccuracy: gpsAccuracy ?? this.gpsAccuracy,
       );
 
+  /// Pace dari kecepatan GPS Doppler (pos.speed) — akurat saat bergerak.
+  /// Fallback ke distance/time jika speed tidak tersedia.
+  String get currentPace {
+    // Gunakan Doppler speed jika > 0.5 m/s (sedang bergerak)
+    if (currentSpeedMs > 0.5) {
+      final secsPerKm = (1000 / currentSpeedMs).round();
+      final m = secsPerKm ~/ 60;
+      final s = secsPerKm % 60;
+      return "$m'${s.toString().padLeft(2, '0')}\"/km";
+    }
+    // Fallback: avg pace dari total distance/time
+    if (distanceKm > 0.01 && elapsedSeconds > 0) {
+      final secsPerKm = (elapsedSeconds / distanceKm).round();
+      final m = secsPerKm ~/ 60;
+      final s = secsPerKm % 60;
+      return "$m'${s.toString().padLeft(2, '0')}\"/km";
+    }
+    return '--\'--"/km';
+  }
+
   String get avgPace {
-    if (distanceKm <= 0) return '--\'--"/km';
+    if (distanceKm <= 0.01) return '--\'--"/km';
     final secsPerKm = (elapsedSeconds / distanceKm).round();
     final m = secsPerKm ~/ 60;
     final s = secsPerKm % 60;
@@ -1369,20 +1399,40 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       onPosition: (pos) {
         // Jangan update jika paused
         if (state.isPaused) return;
+
+        final accuracy = pos.accuracy; // meter
+        final speedMs = pos.speed < 0 ? 0.0 : pos.speed; // m/s, -1 jika tidak tersedia
+
+        // ── Filter akurasi: abaikan posisi dengan akurasi buruk (> 25m) ──
+        // Ini mencegah GPS drift/noise saat sinyal lemah
+        if (accuracy > 25.0) {
+          // Tetap update akurasi agar UI bisa tampilkan status sinyal
+          state = state.copyWith(gpsAccuracy: accuracy);
+          return;
+        }
+
         final newPoint = LatLngPoint(pos.latitude, pos.longitude);
         double addedKm = 0;
+
         if (_lastPoint != null) {
-          addedKm = LocationService.haversineDistance(
+          final rawKm = LocationService.haversineDistance(
             _lastPoint!.lat, _lastPoint!.lng,
             newPoint.lat, newPoint.lng,
           );
-          // Filter noise GPS: abaikan jika jarak < 2m (0.002 km)
-          if (addedKm < 0.002) addedKm = 0;
+          // Threshold noise adaptif: max jarak yang masuk akal = accuracy * 2 (dalam km)
+          final maxReasonableKm = (accuracy * 2) / 1000.0;
+          // Juga filter jarak minimum 3m agar tidak akumulasi saat diam
+          if (rawKm > 0.003 && rawKm <= maxReasonableKm.clamp(0.003, 0.5)) {
+            addedKm = rawKm;
+          }
         }
+
         _lastPoint = newPoint;
         state = state.copyWith(
           distanceKm: state.distanceKm + addedKm,
           routePoints: [...state.routePoints, newPoint],
+          currentSpeedMs: speedMs,
+          gpsAccuracy: accuracy,
         );
       },
     );
