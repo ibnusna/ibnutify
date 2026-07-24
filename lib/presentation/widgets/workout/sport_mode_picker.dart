@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/app_theme.dart';
-import '../../data/models/song_model.dart';
-import '../../presentation/screens/workout/workout_active_screen.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../data/models/song_model.dart';
+import '../../screens/workout/workout_active_screen.dart';
 
 /// Bottom sheet untuk memilih jenis olahraga sebelum memulai sesi.
 /// Digunakan dari MoreOptionsSheet untuk menghindari circular import.
