@@ -224,9 +224,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       onTap: () {
                         ref.read(selectedGenreProvider.notifier).state = null;
                       },
-                      child: const Container(
-                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: const BoxDecoration(
                           color: AppColors.primary,
                           borderRadius: BorderRadius.all(Radius.circular(12)),
                         ),
@@ -451,7 +451,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  Widget _buildPlaylistsCategory(List dynamic playlists) {
+  Widget _buildPlaylistsCategory(List<dynamic> playlists) {
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       sliver: SliverList(

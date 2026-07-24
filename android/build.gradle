@@ -6,9 +6,17 @@ buildscript {
         maven { url "https://chaquo.com/maven" }
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.4.2'
+        classpath 'com.android.tools.build:gradle:8.1.0'
         classpath 'com.chaquo.python:gradle:15.0.1'
     }
+}
+
+ext {
+    flutter = [
+        compileSdkVersion: 34,
+        targetSdkVersion: 34,
+        minSdkVersion: 24
+    ]
 }
 
 allprojects {
@@ -29,6 +37,9 @@ subprojects { project ->
     if (project.name != 'app') {
         project.afterEvaluate {
             if (project.hasProperty('android')) {
+                if (project.android.namespace == null) {
+                    project.android.namespace = "com.ibnutify." + project.name.replace("-", "_").replace(":", "_")
+                }
                 project.android {
                     compileOptions {
                         sourceCompatibility JavaVersion.VERSION_17

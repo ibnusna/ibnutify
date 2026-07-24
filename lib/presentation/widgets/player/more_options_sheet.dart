@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/song_model.dart';
 import '../../providers/app_providers.dart';
-import '../../screens/workout/workout_active_screen.dart';
+import '../workout/sport_mode_picker.dart';
 import '../common/song_artwork_widget.dart';
 
 /// Bottom sheet with options for a song — mirrors MoreOptionsSheet.tsx
@@ -131,24 +131,10 @@ class MoreOptionsSheet extends ConsumerWidget {
               label: 'Mulai Mode Olahraga',
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  PageRouteBuilder(
-                    pageBuilder: (_, __, ___) => WorkoutActiveScreen(
-                      sportMode: 'Berlari',
-                      initialSong: song,
-                    ),
-                    transitionsBuilder: (_, animation, __, child) =>
-                        SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, 1),
-                        end: Offset.zero,
-                      ).animate(CurvedAnimation(
-                          parent: animation, curve: Curves.easeOutCubic)),
-                      child: child,
-                    ),
-                    transitionDuration: const Duration(milliseconds: 380),
-                  ),
+                showModalBottomSheet(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => SportModePicker(initialSong: song),
                 );
               },
             ),
@@ -468,3 +454,4 @@ class _OptionTile extends StatelessWidget {
     );
   }
 }
+

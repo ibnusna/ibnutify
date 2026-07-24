@@ -1319,7 +1319,9 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
 
   List<SongModel> _buildBpmQueue(String sportMode) {
     final allSongs = ref.read(songsProvider).value ?? [];
-    final withBpm = allSongs.where((s) => s.bpm != null).toList();
+    // Shuffle untuk variasi lagu
+    final shuffled = List<SongModel>.from(allSongs)..shuffle();
+    final withBpm = shuffled.where((s) => s.bpm != null).toList();
 
     List<SongModel> filtered;
     if (sportMode == 'Berjalan') {
@@ -1327,9 +1329,11 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
     } else if (sportMode == 'Mendaki') {
       filtered = withBpm.where((s) => s.bpm! < 80).toList();
     } else {
+      // Berlari / Sepeda: BPM >= 120
       filtered = withBpm.where((s) => s.bpm! >= 120).toList();
     }
-    if (filtered.isEmpty) filtered = allSongs;
+    // Fallback: jika tidak ada lagu BPM yang cocok, gunakan semua lagu diacak
+    if (filtered.isEmpty) return shuffled;
     return filtered;
   }
 
@@ -1340,14 +1344,31 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       return false;
     }
 
+    // ── 1. Set state DULU agar isRunning = true sebelum GPS/timer aktif ──
     final bpmQueue = _buildBpmQueue(sportMode);
+    state = WorkoutState(
+      sportMode: sportMode,
+      isRunning: true,
+      isPaused: false,
+      locationGranted: true,
+      elapsedSeconds: 0,
+      distanceKm: 0,
+      routePoints: const [],
+      songsPlayed: 0,
+    );
+
+    // ── 2. Mulai putar lagu BPM (setelah state di-set) ──
     if (bpmQueue.isNotEmpty) {
-      await ref.read(playerProvider.notifier).playSong(bpmQueue.first, bpmQueue);
+      unawaited(ref.read(playerProvider.notifier).playSong(bpmQueue.first, bpmQueue));
+      state = state.copyWith(songsPlayed: 1);
     }
 
+    // ── 3. Mulai GPS stream ──
     _lastPoint = null;
     _gpsSub = LocationService.instance.startTracking(
       onPosition: (pos) {
+        // Jangan update jika paused
+        if (state.isPaused) return;
         final newPoint = LatLngPoint(pos.latitude, pos.longitude);
         double addedKm = 0;
         if (_lastPoint != null) {
@@ -1355,6 +1376,8 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
             _lastPoint!.lat, _lastPoint!.lng,
             newPoint.lat, newPoint.lng,
           );
+          // Filter noise GPS: abaikan jika jarak < 2m (0.002 km)
+          if (addedKm < 0.002) addedKm = 0;
         }
         _lastPoint = newPoint;
         state = state.copyWith(
@@ -1364,18 +1387,8 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       },
     );
 
+    // ── 4. Mulai timer ──
     _startTimer();
-
-    state = WorkoutState(
-      sportMode: sportMode,
-      isRunning: true,
-      isPaused: false,
-      locationGranted: true,
-      elapsedSeconds: 0,
-      distanceKm: 0,
-      routePoints: const [],
-      songsPlayed: bpmQueue.isNotEmpty ? 1 : 0,
-    );
     return true;
   }
 

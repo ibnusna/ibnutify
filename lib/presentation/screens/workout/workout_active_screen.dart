@@ -4,6 +4,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../data/models/song_model.dart';
 import '../../providers/app_providers.dart';
 import '../../widgets/common/song_artwork_widget.dart';
+import '../../widgets/player/more_options_sheet.dart';
+import 'workout_history_screen.dart';
 import 'workout_summary_screen.dart';
 
 /// WorkoutActiveScreen — layar pelacakan GPS real-time + Pace Match music.
@@ -199,7 +201,23 @@ class _WorkoutActiveScreenState extends ConsumerState<WorkoutActiveScreen>
                             await ref
                                 .read(workoutProvider.notifier)
                                 .stopWorkout();
-                            if (mounted) Navigator.pop(context);
+                            if (!mounted) return;
+                            // Kembali ke WorkoutHistoryScreen — bukan HomeScreen
+                            Navigator.pushReplacement(
+                              context,
+                              PageRouteBuilder(
+                                pageBuilder: (_, __, ___) =>
+                                    const WorkoutHistoryScreen(),
+                                transitionsBuilder:
+                                    (_, animation, __, child) =>
+                                        FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                ),
+                                transitionDuration:
+                                    const Duration(milliseconds: 300),
+                              ),
+                            );
                           }
                         },
                       ),
@@ -690,6 +708,19 @@ class _PaceMatchPlayer extends ConsumerWidget {
                 color: AppColors.onSurfaceVariant, size: 26),
             onPressed: () =>
                 ref.read(playerProvider.notifier).nextTrack(),
+          ),
+          // Tombol titik tiga — buka MoreOptionsSheet sesuai queue
+          IconButton(
+            icon: const Icon(Icons.more_vert_rounded,
+                color: AppColors.onSurfaceVariant, size: 22),
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                backgroundColor: Colors.transparent,
+                isScrollControlled: true,
+                builder: (_) => MoreOptionsSheet(song: song),
+              );
+            },
           ),
         ],
       ),
