@@ -1291,23 +1291,18 @@ class WorkoutState {
         gpsAccuracy: gpsAccuracy ?? this.gpsAccuracy,
       );
 
-  /// Pace dari kecepatan GPS Doppler (pos.speed) — akurat saat bergerak.
-  /// Fallback ke distance/time jika speed tidak tersedia.
+  /// Pace realtime dari GPS Doppler speed (pos.speed).
+  /// Hanya tampil saat benar-benar bergerak. Tidak ada fallback ke avgPace
+  /// agar tidak tampilkan nilai absurd saat GPS drift.
   String get currentPace {
-    // Gunakan Doppler speed jika > 0.5 m/s (sedang bergerak)
-    if (currentSpeedMs > 0.5) {
+    // Gunakan Doppler speed jika valid dan user bergerak (> 0.8 m/s = 2.9 km/h)
+    if (currentSpeedMs > 0.8) {
       final secsPerKm = (1000 / currentSpeedMs).round();
       final m = secsPerKm ~/ 60;
       final s = secsPerKm % 60;
       return "$m'${s.toString().padLeft(2, '0')}\"/km";
     }
-    // Fallback: avg pace dari total distance/time
-    if (distanceKm > 0.01 && elapsedSeconds > 0) {
-      final secsPerKm = (elapsedSeconds / distanceKm).round();
-      final m = secsPerKm ~/ 60;
-      final s = secsPerKm % 60;
-      return "$m'${s.toString().padLeft(2, '0')}\"/km";
-    }
+    // Tidak ada fallback — tampilkan '--' saat diam
     return '--\'--"/km';
   }
 
@@ -1400,26 +1395,18 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       onPosition: (pos) {
         if (state.isPaused) return;
 
-        final accuracy = pos.accuracy; // meter
-        // pos.speed: m/s dari Doppler. Negatif = tidak tersedia di device ini
+        final accuracy = pos.accuracy;
         final speedMs = pos.speed < 0 ? 0.0 : pos.speed;
 
-        // Selalu update info GPS untuk UI (akurasi + kecepatan)
+        // Update speed + akurasi untuk UI (pace display + indikator)
         state = state.copyWith(
           currentSpeedMs: speedMs,
           gpsAccuracy: accuracy,
         );
 
-        // ── GATE UTAMA: hanya akumulasi jarak jika user benar-benar bergerak ──
-        // pos.speed (Doppler) sangat reliabel:
-        //   - Diam  → speed ≈ 0 m/s  → TIDAK akumulasi (cegah drift)
-        //   - Jalan → speed ≈ 1.4 m/s → AKUMULASI
-        //   - Lari  → speed ≈ 3+ m/s  → AKUMULASI
-        // Threshold 0.5 m/s ≈ 1.8 km/h (sangat lambat, tapi bukan diam)
-        final isMoving = speedMs > 0.5;
-
-        // Abaikan juga jika sinyal sangat buruk (> 40m accuracy)
-        if (!isMoving || accuracy > 40.0) return;
+        // distanceFilter=10m di OS sudah handle drift dengan reliable.
+        // Hanya skip jika akurasi sangat buruk (> 40m).
+        if (accuracy > 40.0) return;
 
         final newPoint = LatLngPoint(pos.latitude, pos.longitude);
         double addedKm = 0;
@@ -1429,8 +1416,8 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
             _lastPoint!.lat, _lastPoint!.lng,
             newPoint.lat, newPoint.lng,
           );
-          // Sanity check: max 300m per update (cegah GPS teleport)
-          if (rawKm > 0 && rawKm < 0.3) {
+          // Proteksi GPS teleport: max 500m per callback
+          if (rawKm > 0 && rawKm < 0.5) {
             addedKm = rawKm;
           }
         }
