@@ -16,6 +16,7 @@ import 'package:ibnutify/data/models/activity_model.dart';
 import 'package:ibnutify/services/audio_handler.dart';
 import 'package:ibnutify/services/album_art_service.dart';
 import 'package:ibnutify/services/location_service.dart';
+import 'package:ibnutify/services/health_connect_service.dart';
 import 'package:ibnutify/services/ml_service.dart';
 import 'package:ibnutify/services/download_service.dart';
 import 'package:ibnutify/services/smart_shuffle_service.dart';
@@ -1397,19 +1398,28 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
     _lastPoint = null;
     _gpsSub = LocationService.instance.startTracking(
       onPosition: (pos) {
-        // Jangan update jika paused
         if (state.isPaused) return;
 
         final accuracy = pos.accuracy; // meter
-        final speedMs = pos.speed < 0 ? 0.0 : pos.speed; // m/s, -1 jika tidak tersedia
+        // pos.speed: m/s dari Doppler. Negatif = tidak tersedia di device ini
+        final speedMs = pos.speed < 0 ? 0.0 : pos.speed;
 
-        // ── Filter akurasi: abaikan posisi dengan akurasi buruk (> 25m) ──
-        // Ini mencegah GPS drift/noise saat sinyal lemah
-        if (accuracy > 25.0) {
-          // Tetap update akurasi agar UI bisa tampilkan status sinyal
-          state = state.copyWith(gpsAccuracy: accuracy);
-          return;
-        }
+        // Selalu update info GPS untuk UI (akurasi + kecepatan)
+        state = state.copyWith(
+          currentSpeedMs: speedMs,
+          gpsAccuracy: accuracy,
+        );
+
+        // ── GATE UTAMA: hanya akumulasi jarak jika user benar-benar bergerak ──
+        // pos.speed (Doppler) sangat reliabel:
+        //   - Diam  → speed ≈ 0 m/s  → TIDAK akumulasi (cegah drift)
+        //   - Jalan → speed ≈ 1.4 m/s → AKUMULASI
+        //   - Lari  → speed ≈ 3+ m/s  → AKUMULASI
+        // Threshold 0.5 m/s ≈ 1.8 km/h (sangat lambat, tapi bukan diam)
+        final isMoving = speedMs > 0.5;
+
+        // Abaikan juga jika sinyal sangat buruk (> 40m accuracy)
+        if (!isMoving || accuracy > 40.0) return;
 
         final newPoint = LatLngPoint(pos.latitude, pos.longitude);
         double addedKm = 0;
@@ -1419,10 +1429,8 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
             _lastPoint!.lat, _lastPoint!.lng,
             newPoint.lat, newPoint.lng,
           );
-          // Threshold noise adaptif: max jarak yang masuk akal = accuracy * 2 (dalam km)
-          final maxReasonableKm = (accuracy * 2) / 1000.0;
-          // Juga filter jarak minimum 3m agar tidak akumulasi saat diam
-          if (rawKm > 0.003 && rawKm <= maxReasonableKm.clamp(0.003, 0.5)) {
+          // Sanity check: max 300m per update (cegah GPS teleport)
+          if (rawKm > 0 && rawKm < 0.3) {
             addedKm = rawKm;
           }
         }
@@ -1431,8 +1439,6 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
         state = state.copyWith(
           distanceKm: state.distanceKm + addedKm,
           routePoints: [...state.routePoints, newPoint],
-          currentSpeedMs: speedMs,
-          gpsAccuracy: accuracy,
         );
       },
     );
@@ -1481,6 +1487,8 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
     final activity = snapshot.toActivity();
     await DatabaseHelper.instance.insertActivity(activity.toMap());
     ref.invalidate(activitiesProvider);
+    // Sync ke Android Health Connect (silent fail jika tidak tersedia)
+    unawaited(HealthConnectService.instance.writeWorkout(activity));
   }
 }
 
