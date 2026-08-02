@@ -1291,18 +1291,21 @@ class WorkoutState {
         gpsAccuracy: gpsAccuracy ?? this.gpsAccuracy,
       );
 
-  /// Pace realtime dari GPS Doppler speed (pos.speed).
-  /// Hanya tampil saat benar-benar bergerak. Tidak ada fallback ke avgPace
-  /// agar tidak tampilkan nilai absurd saat GPS drift.
+  /// Pace realtime dari GPS Doppler speed (pos.speed) atau avgPace sebagai fallback.
   String get currentPace {
-    // Gunakan Doppler speed jika valid dan user bergerak (> 0.8 m/s = 2.9 km/h)
-    if (currentSpeedMs > 0.8) {
+    // Gunakan Doppler speed jika valid dan user bergerak (> 0.5 m/s = 1.8 km/h)
+    if (currentSpeedMs > 0.5) {
       final secsPerKm = (1000 / currentSpeedMs).round();
-      final m = secsPerKm ~/ 60;
-      final s = secsPerKm % 60;
-      return "$m'${s.toString().padLeft(2, '0')}\"/km";
+      if (secsPerKm > 0 && secsPerKm < 3600) {
+        final m = secsPerKm ~/ 60;
+        final s = secsPerKm % 60;
+        return "$m'${s.toString().padLeft(2, '0')}\"/km";
+      }
     }
-    // Tidak ada fallback — tampilkan '--' saat diam
+    // Fallback: Tampilkan average pace jika sudah bergerak atau ada jarak & waktu
+    if (distanceKm > 0.005 && elapsedSeconds > 0) {
+      return avgPace;
+    }
     return '--\'--"/km';
   }
 
@@ -1338,6 +1341,8 @@ class WorkoutState {
 class WorkoutNotifier extends Notifier<WorkoutState> {
   Timer? _timer;
   StreamSubscription<Position>? _gpsSub;
+  // Bug 4 fix: listener untuk tracking berapa lagu yang diputar
+  StreamSubscription? _songTrackingSub;
   LatLngPoint? _lastPoint;
 
   @override
@@ -1363,15 +1368,21 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
     return filtered;
   }
 
-  Future<bool> startWorkout(String sportMode) async {
+  /// [Bug 1 Fix] Tambah parameter useCurrentQueue:
+  /// - true  → gunakan antrean musik yang sedang aktif (dari titik 3 / saat ada lagu berjalan)
+  /// - false → buat antrean BPM baru (dari WorkoutHistoryScreen → Baru)
+  Future<bool> startWorkout(String sportMode, {bool useCurrentQueue = false}) async {
     final granted = await LocationService.instance.requestPermission();
     if (!granted) {
       state = state.copyWith(locationGranted: false);
       return false;
     }
 
+    // Hitung songsPlayed awal berdasarkan apakah ada lagu yang sedang diputar
+    final currentPlayerState = ref.read(playerProvider);
+    final initialSongsPlayed = (useCurrentQueue && currentPlayerState.currentSong != null) ? 1 : 0;
+
     // ── 1. Set state DULU agar isRunning = true sebelum GPS/timer aktif ──
-    final bpmQueue = _buildBpmQueue(sportMode);
     state = WorkoutState(
       sportMode: sportMode,
       isRunning: true,
@@ -1380,33 +1391,73 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       elapsedSeconds: 0,
       distanceKm: 0,
       routePoints: const [],
-      songsPlayed: 0,
+      songsPlayed: initialSongsPlayed,
     );
 
-    // ── 2. Mulai putar lagu BPM (setelah state di-set) ──
-    if (bpmQueue.isNotEmpty) {
-      unawaited(ref.read(playerProvider.notifier).playSong(bpmQueue.first, bpmQueue));
-      state = state.copyWith(songsPlayed: 1);
+    // ── 2. Mulai/pertahankan pemutaran musik ──
+    if (!useCurrentQueue) {
+      // Mode baru: buat antrean BPM dan mulai putar dari awal
+      final bpmQueue = _buildBpmQueue(sportMode);
+      if (bpmQueue.isNotEmpty) {
+        unawaited(ref.read(playerProvider.notifier).playSong(bpmQueue.first, bpmQueue));
+        state = state.copyWith(songsPlayed: 1);
+      }
     }
+    // Jika useCurrentQueue=true, musik yang sedang berjalan dibiarkan, tidak diganti.
 
-    // ── 3. Mulai GPS stream ──
+    // ── 3. [Bug 4 Fix] Mulai tracking pergantian lagu via mediaItem stream ──
+    _songTrackingSub?.cancel();
+    String? _lastTrackedMediaId;
+    _songTrackingSub = ref.read(audioHandlerProvider).mediaItem.listen((item) {
+      if (!state.isRunning) return;
+      final newId = item?.id;
+      if (newId != null && newId != _lastTrackedMediaId) {
+        _lastTrackedMediaId = newId;
+        // Jangan increment di pertama kali (sudah di-set di initialSongsPlayed)
+        if (state.songsPlayed > 0) {
+          state = state.copyWith(songsPlayed: state.songsPlayed + 1);
+        } else {
+          state = state.copyWith(songsPlayed: 1);
+        }
+      }
+    });
+
+    // ── 4. Ambil lokasi awal & mulai GPS stream ──
     _lastPoint = null;
+    try {
+      final initialPos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 5),
+        ),
+      );
+      if (state.isRunning) {
+        final initPoint = LatLngPoint(initialPos.latitude, initialPos.longitude);
+        _lastPoint = initPoint;
+        state = state.copyWith(
+          currentSpeedMs: initialPos.speed < 0 ? 0.0 : initialPos.speed,
+          gpsAccuracy: initialPos.accuracy,
+          routePoints: [initPoint],
+        );
+      }
+    } catch (_) {}
+
     _gpsSub = LocationService.instance.startTracking(
       onPosition: (pos) {
-        if (state.isPaused) return;
-
+        // [Bug 5 Fix] Selalu update speed & accuracy, bahkan saat paused
+        // Ini memastikan GPS tetap aktif dan indikator akurasi terus tampil
         final accuracy = pos.accuracy;
         final speedMs = pos.speed < 0 ? 0.0 : pos.speed;
-
-        // Update speed + akurasi untuk UI (pace display + indikator)
         state = state.copyWith(
           currentSpeedMs: speedMs,
           gpsAccuracy: accuracy,
         );
 
-        // distanceFilter=10m di OS sudah handle drift dengan reliable.
-        // Hanya skip jika akurasi sangat buruk (> 40m).
-        if (accuracy > 40.0) return;
+        // Skip penambahan jarak & rute saat paused — timer juga berhenti
+        if (state.isPaused) return;
+
+        // Hanya skip jika akurasi sangat buruk (> 50m)
+        if (accuracy > 50.0) return;
 
         final newPoint = LatLngPoint(pos.latitude, pos.longitude);
         double addedKm = 0;
@@ -1416,21 +1467,27 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
             _lastPoint!.lat, _lastPoint!.lng,
             newPoint.lat, newPoint.lng,
           );
-          // Proteksi GPS teleport: max 500m per callback
-          if (rawKm > 0 && rawKm < 0.5) {
+          // Tambahkan jika bergerak >= 1.5m (0.0015 km) untuk kurangi static jitter
+          if (rawKm >= 0.0015 && rawKm < 0.5) {
             addedKm = rawKm;
+            _lastPoint = newPoint;
           }
+        } else {
+          _lastPoint = newPoint;
         }
 
-        _lastPoint = newPoint;
+        final updatedPoints = (addedKm > 0 || state.routePoints.isEmpty)
+            ? [...state.routePoints, newPoint]
+            : state.routePoints;
+
         state = state.copyWith(
           distanceKm: state.distanceKm + addedKm,
-          routePoints: [...state.routePoints, newPoint],
+          routePoints: updatedPoints,
         );
       },
     );
 
-    // ── 4. Mulai timer ──
+    // ── 5. Mulai timer ──
     _startTimer();
     return true;
   }
@@ -1438,6 +1495,7 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
   void _startTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      // [Bug 5 Fix] Hanya timer yang berhenti saat pause — GPS tetap jalan (di GPS callback)
       if (!state.isPaused && state.isRunning) {
         state = state.copyWith(elapsedSeconds: state.elapsedSeconds + 1);
       }
@@ -1445,6 +1503,7 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
   }
 
   void pauseWorkout() {
+    // Hanya pause timer & musik — GPS tracking tetap berjalan (update speed/accuracy)
     state = state.copyWith(isPaused: true);
     final playerState = ref.read(playerProvider);
     if (playerState.isPlaying) {
@@ -1465,6 +1524,9 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
     _timer = null;
     await _gpsSub?.cancel();
     _gpsSub = null;
+    // Bug 4 fix: cleanup song tracking subscription
+    await _songTrackingSub?.cancel();
+    _songTrackingSub = null;
     final snapshot = state;
     state = const WorkoutState();
     return snapshot;

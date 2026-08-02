@@ -24,7 +24,7 @@ android {
 
     defaultConfig {
         applicationId = "com.ibnutify.ibnutify"
-        minSdk = 24 // Required for just_audio, audio_service, and Chaquopy Scipy
+        minSdk = 26 // Required for health plugin, just_audio, audio_service, and Chaquopy
         targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName

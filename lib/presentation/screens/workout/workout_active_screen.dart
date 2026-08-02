@@ -51,9 +51,14 @@ class _WorkoutActiveScreenState extends ConsumerState<WorkoutActiveScreen>
   }
 
   Future<void> _startWorkout() async {
+    // [Bug 1 Fix] Jika ada initialSong (dari titik 3) atau ada lagu yang sedang diputar,
+    // gunakan antrean saat ini — tidak perlu membangun BPM queue baru
+    final currentSong = ref.read(playerProvider).currentSong;
+    final useCurrentQueue = widget.initialSong != null || currentSong != null;
+
     final ok = await ref
         .read(workoutProvider.notifier)
-        .startWorkout(widget.sportMode);
+        .startWorkout(widget.sportMode, useCurrentQueue: useCurrentQueue);
     if (!mounted) return;
     if (!ok) {
       setState(() => _locationDenied = true);
@@ -125,13 +130,83 @@ class _WorkoutActiveScreenState extends ConsumerState<WorkoutActiveScreen>
     }
   }
 
+  /// [Bug 2 Fix] Dialog back: pilih antara lanjut di background atau keluar/stop.
+  Future<void> _onBackPressed() async {
+    final choice = await showDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerHigh,
+        title: const Text('Mode Olahraga Aktif',
+            style: TextStyle(color: AppColors.onSurface)),
+        content: const Text(
+          'Sesi olahraga masih berjalan.\n\nPilih tindakan:',
+          style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop('cancel'),
+            child: const Text('Batal',
+                style: TextStyle(color: AppColors.onSurfaceVariant)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop('background'),
+            child: const Text(
+              'Lanjut di Background',
+              style: TextStyle(
+                  color: AppColors.primary, fontWeight: FontWeight.w700),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop('stop'),
+            child: const Text(
+              'Hentikan & Keluar',
+              style: TextStyle(
+                  color: Colors.redAccent, fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (choice == 'background') {
+      // Lanjut berjalan di background — pop layar saja, workout tetap jalan
+      Navigator.of(context).pop();
+    } else if (choice == 'stop') {
+      // Hentikan workout dan kembali ke WorkoutHistoryScreen
+      await ref.read(workoutProvider.notifier).stopWorkout();
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => const WorkoutHistoryScreen(),
+          transitionsBuilder: (_, animation, __, child) => FadeTransition(
+            opacity: animation,
+            child: child,
+          ),
+          transitionDuration: const Duration(milliseconds: 300),
+        ),
+      );
+    }
+    // 'cancel' atau null: tidak melakukan apa-apa, kembali ke layar
+  }
+
   @override
   Widget build(BuildContext context) {
     final workout = ref.watch(workoutProvider);
     final player = ref.watch(playerProvider);
     final currentSong = player.currentSong;
 
-    return Scaffold(
+    return PopScope(
+      // [Bug 2 Fix] Intercept hardware back button — tampilkan pilihan Background/Keluar
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        await _onBackPressed();
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
@@ -167,59 +242,7 @@ class _WorkoutActiveScreenState extends ConsumerState<WorkoutActiveScreen>
                       IconButton(
                         icon: const Icon(Icons.arrow_back_rounded,
                             color: AppColors.onSurface),
-                        onPressed: () async {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              backgroundColor: AppColors.surfaceContainerHigh,
-                              title: const Text('Keluar dari olahraga?',
-                                  style: TextStyle(color: AppColors.onSurface)),
-                              content: const Text(
-                                'Sesi aktif akan dihentikan. Data tidak tersimpan.',
-                                style: TextStyle(
-                                    color: AppColors.onSurfaceVariant,
-                                    fontSize: 14),
-                              ),
-                              actions: [
-                                TextButton(
-                                    onPressed: () =>
-                                        Navigator.of(ctx).pop(false),
-                                    child: const Text('Batal',
-                                        style: TextStyle(
-                                            color: AppColors.onSurfaceVariant))),
-                                TextButton(
-                                    onPressed: () =>
-                                        Navigator.of(ctx).pop(true),
-                                    child: const Text('Keluar',
-                                        style: TextStyle(
-                                            color: Colors.redAccent,
-                                            fontWeight: FontWeight.w900))),
-                              ],
-                            ),
-                          );
-                          if (confirm == true && mounted) {
-                            await ref
-                                .read(workoutProvider.notifier)
-                                .stopWorkout();
-                            if (!mounted) return;
-                            // Kembali ke WorkoutHistoryScreen — bukan HomeScreen
-                            Navigator.pushReplacement(
-                              context,
-                              PageRouteBuilder(
-                                pageBuilder: (_, __, ___) =>
-                                    const WorkoutHistoryScreen(),
-                                transitionsBuilder:
-                                    (_, animation, __, child) =>
-                                        FadeTransition(
-                                  opacity: animation,
-                                  child: child,
-                                ),
-                                transitionDuration:
-                                    const Duration(milliseconds: 300),
-                              ),
-                            );
-                          }
-                        },
+                        onPressed: _onBackPressed,
                       ),
                       const SizedBox(width: 4),
                       Icon(_sportIcon, color: AppColors.primary, size: 20),
@@ -528,7 +551,8 @@ class _WorkoutActiveScreenState extends ConsumerState<WorkoutActiveScreen>
           ),
         ],
       ),
-    );
+    ), // End Scaffold (child of PopScope)
+    ); // End PopScope
   }
 }
 

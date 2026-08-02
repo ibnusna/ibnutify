@@ -574,7 +574,7 @@ def _add_mp3_metadata(filepath, track_info, youtube_url):
         if track_info.get('lyrics'):
             audio.tags.add(USLT(encoding=3, lang='eng', desc='desc', text=track_info['lyrics']))
 
-        # Synced lyrics (.lrc + SYLT tag)
+        # Synced lyrics (.lrc)
         if track_info.get('synced_lyrics'):
             lrc_path = filepath.rsplit('.', 1)[0] + '.lrc'
             try:
@@ -582,22 +582,6 @@ def _add_mp3_metadata(filepath, track_info, youtube_url):
                     f.write(track_info['synced_lyrics'])
             except Exception:
                 pass
-
-            sylt_data = []
-            for line in track_info['synced_lyrics'].split('\n'):
-                m = re.match(r'\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)', line)
-                if m:
-                    mins, secs, ms_part, text = m.groups()
-                    ms = int(ms_part)
-                    if len(ms_part) == 2:
-                        ms *= 10
-                    total_ms = int(mins) * 60000 + int(secs) * 1000 + ms
-                    sylt_data.append((text.strip(), total_ms))
-
-            if sylt_data:
-                audio.tags.add(
-                    SYLT(encoding=3, lang='eng', format=2, type=1, desc='desc', text=sylt_data)
-                )
 
         audio.save()
     except Exception:

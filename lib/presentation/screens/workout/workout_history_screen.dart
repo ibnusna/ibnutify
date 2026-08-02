@@ -4,7 +4,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../data/models/activity_model.dart';
 import '../../providers/app_providers.dart';
 import '../../widgets/workout/sport_mode_picker.dart';
-import 'workout_active_screen.dart';
+import 'workout_detail_screen.dart';
 
 /// WorkoutHistoryScreen — daftar riwayat aktivitas olahraga.
 /// Diakses dari ikon [🏃] di Top App Bar HomeScreen.
@@ -276,7 +276,26 @@ class _ActivityCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () {},
+          onTap: () {
+            // [Bug 3 Fix] Navigasi ke WorkoutDetailScreen dengan data aktivitas
+            Navigator.of(context).push(
+              PageRouteBuilder(
+                pageBuilder: (_, __, ___) =>
+                    WorkoutDetailScreen(activity: activity),
+                transitionsBuilder: (_, animation, __, child) =>
+                    SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(1, 0),
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic)),
+                  child: child,
+                ),
+                transitionDuration: const Duration(milliseconds: 300),
+              ),
+            );
+          },
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(

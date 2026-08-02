@@ -106,7 +106,7 @@ class HealthConnectService {
       case 'Mendaki':
         return HealthWorkoutActivityType.HIKING;
       default:
-        return HealthWorkoutActivityType.WORKOUT;
+        return HealthWorkoutActivityType.OTHER;
     }
   }
 }

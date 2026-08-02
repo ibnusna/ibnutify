@@ -29,18 +29,24 @@ class LocationService {
   // ─── Streaming ─────────────────────────────────────────────────────────────
 
   /// Mulai stream posisi GPS. Callback [onPosition] dipanggil tiap update.
-  /// Filter: distanceFilter 5m, interval 3 detik.
+  /// Filter: distanceFilter 1m, interval 1 detik.
   StreamSubscription<Position> startTracking({
     required void Function(Position position) onPosition,
   }) {
-    // distanceFilter=10: Android OS hanya trigger callback setelah device
-    // benar-benar bergerak 10 meter. Ini lebih reliable dari filter kode
-    // karena dilakukan di level OS/GPS chip, bukan di app.
-    // bestForNavigation: akurasi tertinggi + data pos.speed (Doppler) tersedia
-    const settings = LocationSettings(
-      accuracy: LocationAccuracy.bestForNavigation,
-      distanceFilter: 10,
-    );
+    late final LocationSettings settings;
+    try {
+      settings = AndroidSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 1, // Update tiap 1 meter
+        intervalDuration: const Duration(seconds: 1), // Update tiap 1 detik
+        forceLocationManager: false,
+      );
+    } catch (_) {
+      settings = const LocationSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 1,
+      );
+    }
     _subscription = Geolocator.getPositionStream(locationSettings: settings)
         .listen(onPosition);
     return _subscription!;

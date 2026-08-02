@@ -8,14 +8,14 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import com.ryanheise.audioservice.AudioServicePlugin
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import kotlin.concurrent.thread
 
-class MainActivity: FlutterActivity() {
+class MainActivity: FlutterFragmentActivity() {
     private val CHANNEL = "com.ibnutify.ml/audio"
 
     override fun provideFlutterEngine(context: Context): FlutterEngine? {
@@ -115,7 +115,7 @@ class MainActivity: FlutterActivity() {
                 "downloadTrack" -> {
                     val spotifyUrl = call.argument<String>("spotifyUrl")
                     val downloadDir = call.argument<String>("downloadDir")
-                    val fallbackFfmpegPath = java.io.File(context.applicationInfo.nativeLibraryDir, "libffmpeg.so").absolutePath
+                    val fallbackFfmpegPath = java.io.File(applicationContext.applicationInfo.nativeLibraryDir, "libffmpeg.so").absolutePath
                     val ffmpegPath = call.argument<String>("ffmpegPath")?.takeIf { it.isNotEmpty() } ?: fallbackFfmpegPath
 
                     if (spotifyUrl == null || downloadDir == null) {
@@ -145,7 +145,7 @@ class MainActivity: FlutterActivity() {
                                 val filePath = jsonObj.optString("file_path", "")
                                 if (filePath.isNotEmpty()) {
                                     android.media.MediaScannerConnection.scanFile(
-                                        context,
+                                        applicationContext,
                                         arrayOf(filePath),
                                         null
                                     ) { _, _ -> }
@@ -237,7 +237,7 @@ class MainActivity: FlutterActivity() {
                 "downloadPlaylist" -> {
                     val spotifyUrl = call.argument<String>("spotifyUrl")
                     val downloadDir = call.argument<String>("downloadDir")
-                    val fallbackFfmpegPath = java.io.File(context.applicationInfo.nativeLibraryDir, "libffmpeg.so").absolutePath
+                    val fallbackFfmpegPath = java.io.File(applicationContext.applicationInfo.nativeLibraryDir, "libffmpeg.so").absolutePath
                     val ffmpegPath = call.argument<String>("ffmpegPath")?.takeIf { it.isNotEmpty() } ?: fallbackFfmpegPath
 
                     if (spotifyUrl == null || downloadDir == null) {
@@ -273,7 +273,7 @@ class MainActivity: FlutterActivity() {
                                     if (!audioFiles.isNullOrEmpty()) {
                                         val paths = audioFiles.map { it.absolutePath }.toTypedArray()
                                         android.media.MediaScannerConnection.scanFile(
-                                            context, paths, null
+                                            applicationContext, paths, null
                                         ) { _, _ -> }
                                     }
                                 }
