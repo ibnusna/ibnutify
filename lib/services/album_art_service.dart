@@ -42,6 +42,14 @@ class AlbumArtService {
   /// Used to decide whether to show a loading flash before processing.
   bool isBytesCached(int songId) => _bytesCache.containsKey(songId);
 
+  /// Hapus semua in-memory cache untuk [songId].
+  /// Dipanggil setelah metadata (termasuk albumArtPath) diubah oleh user.
+  void evictSong(int songId) {
+    _bytesCache.remove(songId);
+    _colorCache.remove(songId);
+    _pathCache.remove(songId);
+  }
+
   /// Returns cached artwork bytes for [songId], or queries native if missing.
   Future<Uint8List?> getArtworkBytes(
     int songId,

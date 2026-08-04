@@ -172,11 +172,89 @@ class LyricsNotifier extends Notifier<LyricsState> {
     state = LyricsState(
       status: LyricsStatus.found,
       lyrics: cleaned,
+      syncedLines: LrcParser.parse(cleaned),
       songId: song.id,
       source: LyricsSource.embedded,
     );
   }
+
+  /// Update teks lirik secara langsung dari Edit Lagu sheet (untuk lagu non-aktif).
+  /// [songId] diperlukan karena edit bisa untuk lagu yang tidak sedang diputar.
+  Future<void> updateLyricsForSong({
+    required int songId,
+    required String title,
+    required String artist,
+    required String rawInput,
+  }) async {
+    String cleaned = rawInput
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .replaceAll('\uFEFF', '')
+        .replaceAll('\x00', '')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
+
+    if (cleaned.length < 5) return;
+
+    await LyricsRepository.instance.saveManual(
+      songId: songId,
+      title: title,
+      artist: artist,
+      lyrics: cleaned,
+    );
+
+    // Update state hanya jika lagu yang diedit adalah lagu yang aktif
+    if (state.songId == songId) {
+      final syncedLines = LrcParser.parse(cleaned);
+      state = LyricsState(
+        status: LyricsStatus.found,
+        lyrics: cleaned,
+        syncedLines: syncedLines,
+        songId: songId,
+        source: LyricsSource.embedded,
+      );
+    }
+  }
+
+  /// Geser semua timestamp LRC maju (+) atau mundur (-) sekaligus.
+  /// [offsetSeconds] bisa desimal (contoh: 1.5 = 1500ms).
+  /// Perubahan langsung di-persist ke SQLite.
+  Future<void> shiftTimestamps(double offsetSeconds) async {
+    if (!state.hasSyncedLyrics) return;
+    final song = ref.read(playerProvider).currentSong;
+    if (song == null) return;
+
+    final offsetMs = (offsetSeconds * 1000).toInt();
+    final shifted = state.syncedLines!.map((line) {
+      final newMs = (line.timestamp.inMilliseconds + offsetMs).clamp(0, 5999999);
+      return LrcLine(
+        timestamp: Duration(milliseconds: newMs),
+        text: line.text,
+      );
+    }).toList();
+
+    // Regenerasi string LRC dari shifted lines
+    final newLrc = shifted.map((l) {
+      final totalSecs = l.timestamp.inSeconds;
+      final m = (totalSecs ~/ 60).toString().padLeft(2, '0');
+      final s = (totalSecs % 60).toString().padLeft(2, '0');
+      final ms = (l.timestamp.inMilliseconds % 1000).toString().padLeft(3, '0');
+      return '[$m:$s.$ms]${l.text}';
+    }).join('\n');
+
+    // Update state segera (UI langsung sync)
+    state = state.copyWith(lyrics: newLrc, syncedLines: shifted);
+
+    // Persist ke SQLite
+    await LyricsRepository.instance.saveManual(
+      songId: song.id,
+      title: song.title,
+      artist: song.artist,
+      lyrics: newLrc,
+    );
+  }
 }
+
 
 final lyricsProvider =
     NotifierProvider<LyricsNotifier, LyricsState>(LyricsNotifier.new);

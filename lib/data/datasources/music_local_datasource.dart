@@ -458,6 +458,28 @@ class MusicLocalDatasource {
     );
   }
 
+  // ─── METADATA EDIT ────────────────────────────────────────────────────────
+
+  /// Update editable metadata: artist, album, youtube_url.
+  /// Hanya field yang diberikan (non-null) yang diubah; sisanya dipertahankan.
+  Future<void> updateSongMetadata(
+    int songId, {
+    String? artist,
+    String? album,
+    String? youtubeUrl,
+  }) async {
+    final db = await _db;
+    final maps = await db.query('songs', where: 'id = ?', whereArgs: [songId]);
+    if (maps.isEmpty) return;
+    final song = SongModel.fromMap(maps.first);
+    final updated = song.copyWith(
+      artist: artist ?? song.artist,
+      album: album ?? song.album,
+      youtubeUrl: youtubeUrl ?? song.youtubeUrl,
+    );
+    await db.update('songs', updated.toMap(), where: 'id = ?', whereArgs: [songId]);
+  }
+
   Future<void> updateSongClustersAndEra(Map<int, int> clusters, Map<int, int> eras) async {
     final db = await _db;
     final batch = db.batch();

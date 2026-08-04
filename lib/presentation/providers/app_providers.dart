@@ -142,6 +142,31 @@ class SongsNotifier extends AsyncNotifier<List<SongModel>> {
     await repo.deleteSong(songId);
     await refresh();
   }
+
+  /// Update metadata lagu (artist, album, youtubeUrl) yang bisa diedit user.
+  /// Setelah update DB, evict art cache, refresh list, dan sync player jika perlu.
+  Future<void> updateMetadata(
+    int songId, {
+    String? artist,
+    String? album,
+    String? youtubeUrl,
+  }) async {
+    final repo = ref.read(musicRepositoryProvider);
+    await repo.updateSongMetadata(songId,
+        artist: artist, album: album, youtubeUrl: youtubeUrl);
+
+    // Bersihkan art cache agar artwork di-reload ulang
+    AlbumArtService.instance.evictSong(songId);
+
+    // Refresh state list lagu
+    await refresh();
+
+    // Jika lagu yang diedit sedang diputar, sync currentSong di player
+    final playerState = ref.read(playerProvider);
+    if (playerState.currentSong?.id == songId) {
+      ref.read(playerProvider.notifier).syncCurrentSong(songId);
+    }
+  }
 }
 
 final songsProvider =
@@ -161,6 +186,8 @@ class PlayerState {
   final RepeatMode repeatMode;
   final Duration position;
   final Duration duration;
+  /// Sumber lagu yang sedang diputar, misal: 'Library', 'Search', 'Playlist: Liked Songs'
+  final String? queueSource;
 
   const PlayerState({
     this.currentSong,
@@ -170,6 +197,7 @@ class PlayerState {
     this.repeatMode = RepeatMode.off,
     this.position = Duration.zero,
     this.duration = Duration.zero,
+    this.queueSource,
   });
 
   PlayerState copyWith({
@@ -180,6 +208,8 @@ class PlayerState {
     RepeatMode? repeatMode,
     Duration? position,
     Duration? duration,
+    String? queueSource,
+    bool clearQueueSource = false,
   }) {
     return PlayerState(
       currentSong: currentSong ?? this.currentSong,
@@ -189,6 +219,7 @@ class PlayerState {
       repeatMode: repeatMode ?? this.repeatMode,
       position: position ?? this.position,
       duration: duration ?? this.duration,
+      queueSource: clearQueueSource ? null : (queueSource ?? this.queueSource),
     );
   }
 }
@@ -245,7 +276,10 @@ class PlayerNotifier extends Notifier<PlayerState> {
     }
   }
 
-  Future<void> playSong(SongModel song, List<SongModel> queue) async {
+  /// Public alias dipakai oleh SongsNotifier setelah updateMetadata().
+  void syncCurrentSong(int songId) => _syncCurrentSongFromCache(songId);
+
+  Future<void> playSong(SongModel song, List<SongModel> queue, {String? source}) async {
     final handler = ref.read(audioHandlerProvider);
     final repo = ref.read(musicRepositoryProvider);
     final datasource = ref.read(musicLocalDatasourceProvider);
@@ -273,6 +307,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
     state = state.copyWith(
       currentSong: song,
       queue: queue,
+      queueSource: source ?? 'Library',
     );
 
     // Update artwork sisa queue di background.
@@ -326,7 +361,7 @@ class PlayerNotifier extends Notifier<PlayerState> {
     finalQueue.addAll(sortedOthers);
 
     // 5. Play queue and enable shuffle mode visually
-    await playSong(song, finalQueue);
+    await playSong(song, finalQueue, source: 'Search');
     state = state.copyWith(isShuffle: true);
   }
 

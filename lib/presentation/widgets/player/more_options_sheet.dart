@@ -5,6 +5,7 @@ import '../../../data/models/song_model.dart';
 import '../../providers/app_providers.dart';
 import '../workout/sport_mode_picker.dart';
 import '../common/song_artwork_widget.dart';
+import 'edit_song_sheet.dart';
 
 /// Bottom sheet with options for a song — mirrors MoreOptionsSheet.tsx
 class MoreOptionsSheet extends ConsumerWidget {
@@ -139,6 +140,14 @@ class MoreOptionsSheet extends ConsumerWidget {
               },
             ),
             _OptionTile(
+              icon: Icons.edit_rounded,
+              label: 'Edit Lagu',
+              onTap: () {
+                Navigator.pop(context);
+                _showEditSongSheet(context, ref, song);
+              },
+            ),
+            _OptionTile(
               icon: Icons.delete_outline_rounded,
               label: 'Delete from device',
               isDestructive: true,
@@ -208,6 +217,17 @@ class MoreOptionsSheet extends ConsumerWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _AddToPlaylistSheet(song: song),
+    );
+  }
+
+  /// Opens EditSongSheet — full-featured metadata / YouTube / lyrics editor.
+  void _showEditSongSheet(
+      BuildContext context, WidgetRef ref, SongModel song) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => EditSongSheet(song: song),
     );
   }
 }

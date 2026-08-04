@@ -83,6 +83,16 @@ class MusicRepository {
   Future<void> updateSongFeatures(int id, double bpm, double brightness, double percussiveness, int? releaseYear) =>
       _local.updateSongFeatures(id, bpm, brightness, percussiveness, releaseYear);
 
+  /// Update metadata yang bisa diedit user: artist, album, youtube_url.
+  Future<void> updateSongMetadata(
+    int songId, {
+    String? artist,
+    String? album,
+    String? youtubeUrl,
+  }) =>
+      _local.updateSongMetadata(songId,
+          artist: artist, album: album, youtubeUrl: youtubeUrl);
+
   Future<void> updateSongClustersAndEra(Map<int, int> clusters, Map<int, int> eras) =>
       _local.updateSongClustersAndEra(clusters, eras);
 }
