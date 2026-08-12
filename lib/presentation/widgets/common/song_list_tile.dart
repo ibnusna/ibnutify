@@ -14,6 +14,8 @@ class SongListTile extends ConsumerWidget {
   final bool showDuration;
   final Widget? trailing;
   final VoidCallback? onTap;
+  /// Sumber lagu (opsional), misal 'Playlist: Liked Songs', 'Search', dll.
+  final String? queueSource;
 
   const SongListTile({
     super.key,
@@ -22,6 +24,7 @@ class SongListTile extends ConsumerWidget {
     this.showDuration = true,
     this.trailing,
     this.onTap,
+    this.queueSource,
   });
 
   @override
@@ -33,7 +36,7 @@ class SongListTile extends ConsumerWidget {
     return InkWell(
       onTap: onTap ?? () {
         FocusManager.instance.primaryFocus?.unfocus();
-        ref.read(playerProvider.notifier).playSong(song, queue);
+        ref.read(playerProvider.notifier).playSong(song, queue, source: queueSource);
         Navigator.of(context).push(
           PageRouteBuilder(
             pageBuilder: (_, __, ___) => const PlayerScreen(),

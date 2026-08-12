@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../services/album_art_service.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/album_art_provider.dart';
 import '../../providers/lyrics_provider.dart';
+import '../../widgets/common/song_artwork_widget.dart';
 
 /// Full-screen Lyrics view — mirip Samsung Music / Spotify Lyrics UI.
 ///
@@ -106,22 +109,18 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen>
                     t,
                   )!,
                 );
+                final topColor = blended.first;
                 return Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: blended.length >= 3
-                          ? [
-                              // Darken significantly for readability
-                              _darken(blended[0], 0.7),
-                              _darken(blended[1], 0.8),
-                              _darken(blended.last, 0.9),
-                            ]
-                          : [
-                              _darken(blended.first, 0.7),
-                              _darken(blended.last, 0.9),
-                            ],
+                      stops: const [0.0, 0.4, 1.0],
+                      colors: [
+                        topColor,
+                        _darken(topColor, 0.3),
+                        const Color(0xFF121212),
+                      ],
                     ),
                   ),
                 );
@@ -137,9 +136,9 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen>
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.black.withOpacity(0.25),
-                      Colors.black.withOpacity(0.40),
-                      Colors.black.withOpacity(0.55),
+                      Colors.black.withOpacity(0.1),
+                      Colors.black.withOpacity(0.2),
+                      Colors.transparent, // Fade out scrim at the bottom to reveal dark background
                     ],
                   ),
                 ),
@@ -159,6 +158,8 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen>
                       child: _buildBody(lyricsState, albumArt, song),
                     ),
                   ),
+                  // ── Mini Player Footer (Task 5) ────────────────────────────
+                  _MiniPlayerFooter(song: song),
                 ],
               ),
             ),
@@ -330,11 +331,18 @@ class _LyricsView extends ConsumerStatefulWidget {
 class _LyricsViewState extends ConsumerState<_LyricsView> {
   int _activeIndex = -1;
   late List<GlobalKey> _lineKeys;
+  /// True = auto-scroll mengikuti lirik aktif. False = user sedang manual scroll.
+  bool _autoScroll = true;
 
   @override
   void initState() {
     super.initState();
     _initKeys();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 
   @override
@@ -350,28 +358,33 @@ class _LyricsViewState extends ConsumerState<_LyricsView> {
     _lineKeys = List.generate(count, (_) => GlobalKey());
   }
 
+  /// Scroll ke baris lirik yang sedang aktif.
   void _scrollToActive() {
     if (_activeIndex < 0 || _activeIndex >= _lineKeys.length) return;
-    
     final key = _lineKeys[_activeIndex];
-    final context = key.currentContext;
-    if (context != null) {
+    final ctx = key.currentContext;
+    if (ctx != null) {
       Scrollable.ensureVisible(
-        context,
-        duration: const Duration(milliseconds: 300),
+        ctx,
+        duration: const Duration(milliseconds: 400),
         curve: Curves.easeInOut,
-        alignment: 0.3, // 0.0 is top, 0.5 is center. 0.3 keeps it slightly above center.
+        alignment: 0.3,
       );
     }
+  }
+
+  /// Aktifkan kembali auto-scroll dan langsung sync ke lirik aktif.
+  void _syncNow() {
+    setState(() => _autoScroll = true);
+    _scrollToActive();
   }
 
   @override
   Widget build(BuildContext context) {
     if (widget.lyricsState.hasSyncedLyrics) {
-      // Syncing LRC mode
       final position = ref.watch(playerProvider.select((p) => p.position));
-      
       final lines = widget.lyricsState.syncedLines!;
+
       int newIndex = -1;
       for (int i = 0; i < lines.length; i++) {
         if (position >= lines[i].timestamp) {
@@ -380,46 +393,115 @@ class _LyricsViewState extends ConsumerState<_LyricsView> {
           break;
         }
       }
-      
+
       if (newIndex != _activeIndex) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
-            setState(() {
-              _activeIndex = newIndex;
-            });
-            _scrollToActive();
+            setState(() => _activeIndex = newIndex);
+            if (_autoScroll) _scrollToActive();
           }
         });
       }
 
-      return Scrollbar(
-        controller: widget.scroll,
-        thumbVisibility: false,
-        child: ListView.builder(
-          controller: widget.scroll,
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 300), // Extra bottom padding
-          itemCount: lines.length + 1,
-          itemBuilder: (ctx, i) {
-            if (i == lines.length) return _buildFooter();
-            final isActive = i == _activeIndex;
-            return Padding(
-              key: _lineKeys[i],
-              padding: const EdgeInsets.only(bottom: 24),
-              child: AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 300),
-                style: TextStyle(
-                  color: isActive ? Colors.white : Colors.white.withOpacity(0.3),
-                  fontSize: isActive ? 28 : 24,
-                  fontWeight: FontWeight.w800,
-                  height: 1.5,
-                  letterSpacing: 0.1,
-                ),
-                child: Text(lines[i].text),
+      return Stack(
+        children: [
+          // ── ListView lirik dengan deteksi drag manual ──────────────────────
+          NotificationListener<UserScrollNotification>(
+            onNotification: (notification) {
+              // UserScrollNotification hanya fire saat user BENAR-BENAR drag,
+              // tidak fire saat programmatic scroll via _scrollToActive().
+              if (notification.direction != ScrollDirection.idle) {
+                if (_autoScroll) setState(() => _autoScroll = false);
+              }
+              return false;
+            },
+            child: Scrollbar(
+              controller: widget.scroll,
+              thumbVisibility: false,
+              child: ListView.builder(
+                controller: widget.scroll,
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 300),
+                itemCount: lines.length + 1,
+                itemBuilder: (ctx, i) {
+                  if (i == lines.length) return _buildFooter();
+                  final isActive = i == _activeIndex;
+                  return Padding(
+                    key: _lineKeys[i],
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 300),
+                      style: GoogleFonts.plusJakartaSans(
+                        color: isActive
+                            ? const Color(0xFFFFFFFF)
+                            : const Color(0xFFFFFFFF).withOpacity(0.55),
+                        fontSize: isActive ? 28 : 24,
+                        fontWeight: isActive ? FontWeight.w800 : FontWeight.w700,
+                        height: 1.5,
+                        letterSpacing: isActive ? 28 * -0.02 : 24 * -0.02,
+                      ),
+                      child: Text(lines[i].text),
+                    ),
+                  );
+                },
               ),
-            );
-          },
-        ),
+            ),
+          ),
+
+          // ── Tombol Sync — muncul hanya saat user sudah manual scroll ───────
+          // Posisi: tengah-bawah, style Spotify (putih, pill, equalizer icon)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 24,
+            child: AnimatedOpacity(
+              opacity: _autoScroll ? 0.0 : 1.0,
+              duration: const Duration(milliseconds: 300),
+              child: IgnorePointer(
+                ignoring: _autoScroll,
+                child: Center(
+                  child: GestureDetector(
+                    onTap: _syncNow,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.25),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(
+                            Icons.graphic_eq_rounded,
+                            color: Colors.black,
+                            size: 16,
+                          ),
+                          SizedBox(width: 7),
+                          Text(
+                            'Sync',
+                            style: TextStyle(
+                              color: Colors.black,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       );
     }
 
@@ -494,12 +576,12 @@ class _LyricParagraph extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 28),
       child: Text(
         text,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 24,
-          fontWeight: FontWeight.w700,
+        style: GoogleFonts.plusJakartaSans(
+          color: const Color(0xFFFFFFFF).withOpacity(0.55),
+          fontSize: 17,
+          fontWeight: FontWeight.w600,
           height: 1.65,
-          letterSpacing: 0.1,
+          letterSpacing: 17 * -0.02,
         ),
       ),
     );
@@ -752,5 +834,160 @@ class _ManualLyricsInputViewState
         ],
       ),
     );
+  }
+}
+
+// ─── Mini Player Footer ─────────────────────────────────────────────────────
+/// Footer bergaya Spotify di bagian bawah LyricsScreen:
+/// - Baris atas  : album art kecil + judul + artist + tombol tambah
+/// - Seek bar    : dengan timestamp kiri/kanan
+/// - Controls    : prev / play-pause (besar) / next di tengah
+class _MiniPlayerFooter extends ConsumerWidget {
+  final dynamic song;
+
+  const _MiniPlayerFooter({this.song});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playerState = ref.watch(playerProvider);
+    final currentSong = playerState.currentSong ?? song;
+    if (currentSong == null) return const SizedBox.shrink();
+
+    final progress = playerState.duration.inMilliseconds > 0
+        ? (playerState.position.inMilliseconds /
+                playerState.duration.inMilliseconds)
+            .clamp(0.0, 1.0)
+        : 0.0;
+
+    return Container(
+      decoration: BoxDecoration(
+        // Gunakan gradasi transparan ke sedikit gelap agar menyatu sempurna dengan background layar
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.transparent,
+            Colors.black.withOpacity(0.4),
+          ],
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Baris 1 dihapus (album art + judul + artist) ─────────────────
+          // Cukup tampilkan slider dan kontrol playback sesuai spesifikasi.
+
+          // ── Baris 2: Seek bar ───────────────────────────────────────────
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 3,
+              thumbShape:
+                  const RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape: SliderComponentShape.noOverlay,
+              activeTrackColor: Colors.white,
+              inactiveTrackColor: Colors.white.withOpacity(0.25),
+              thumbColor: Colors.white,
+            ),
+            child: Slider(
+              value: progress,
+              onChanged: (v) {
+                final ms = (v * playerState.duration.inMilliseconds).round();
+                ref
+                    .read(playerProvider.notifier)
+                    .seekToDuration(Duration(milliseconds: ms));
+              },
+            ),
+          ),
+
+          // Timestamps
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _fmt(playerState.position),
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.55),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  _fmt(playerState.duration),
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.55),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          // ── Baris 3: Kontrol prev / play-pause / next ───────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Previous
+              GestureDetector(
+                onTap: () =>
+                    ref.read(playerProvider.notifier).previousTrack(),
+                child: Icon(
+                  Icons.skip_previous_rounded,
+                  color: Colors.white.withOpacity(0.85),
+                  size: 36,
+                ),
+              ),
+
+              const SizedBox(width: 28),
+
+              // Play / Pause (besar, lingkaran putih)
+              GestureDetector(
+                onTap: () =>
+                    ref.read(playerProvider.notifier).togglePlay(),
+                child: Container(
+                  width: 56,
+                  height: 56,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    playerState.isPlaying
+                        ? Icons.pause_rounded
+                        : Icons.play_arrow_rounded,
+                    color: Colors.black,
+                    size: 30,
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 28),
+
+              // Next
+              GestureDetector(
+                onTap: () =>
+                    ref.read(playerProvider.notifier).nextTrack(),
+                child: Icon(
+                  Icons.skip_next_rounded,
+                  color: Colors.white.withOpacity(0.85),
+                  size: 36,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _fmt(Duration d) {
+    final m = d.inMinutes;
+    final s = d.inSeconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
   }
 }

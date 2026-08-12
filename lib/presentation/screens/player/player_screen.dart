@@ -149,7 +149,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                   colors: [
                     Colors.black.withOpacity(0.0),
                     Colors.black.withOpacity(0.15),
-                    Colors.black.withOpacity(0.7),
+                    Colors.black.withOpacity(0.4), // Kurangi dari 0.7 agar gradasi warna tidak tertutup hitam
                   ],
                 ),
               ),
@@ -205,6 +205,21 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                                                   .withOpacity(0.8),
                                               shape: BoxShape.circle,
                                             ),
+                                          ),
+                                        ),
+                                      if (playerState.queueSource != null)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 2),
+                                          child: Text(
+                                            playerState.queueSource!,
+                                            style: TextStyle(
+                                              color: Colors.white.withOpacity(0.55),
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600,
+                                              letterSpacing: 0.5,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
                                     ],
@@ -511,7 +526,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
                             const SizedBox(height: 12),
 
-                            // Footer: device icon + lyrics button + queue button
+                            // Footer: device icon + queue button
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -568,55 +583,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                                         color: AppColors.onSurfaceVariant,
                                         size: 20),
 
-                                // Lyrics button
-                                GestureDetector(
-                                  onTap: () => _openLyrics(context),
-                                  child: Consumer(
-                                    builder: (_, ref, __) {
-                                      final lyrics = ref.watch(lyricsProvider);
-                                      return AnimatedOpacity(
-                                        duration:
-                                            const Duration(milliseconds: 300),
-                                        opacity: lyrics.isLoading ? 0.4 : 1.0,
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.mic_rounded,
-                                              color: lyrics.hasLyrics
-                                                  ? Colors.white
-                                                  : AppColors.onSurfaceVariant,
-                                              size: 18,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              'LYRICS',
-                                              style: TextStyle(
-                                                color: lyrics.hasLyrics
-                                                    ? Colors.white
-                                                    : AppColors.onSurfaceVariant,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w900,
-                                                letterSpacing: 1.5,
-                                              ),
-                                            ),
-                                            if (lyrics.hasLyrics) ...[
-                                              const SizedBox(width: 4),
-                                              Container(
-                                                width: 5,
-                                                height: 5,
-                                                decoration: const BoxDecoration(
-                                                  color: AppColors.primary,
-                                                  shape: BoxShape.circle,
-                                                ),
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
+                                // Spacer tengah
+                                const SizedBox.shrink(),
 
                                 IconButton(
                                   icon: const Icon(Icons.queue_music_rounded,
@@ -724,13 +692,9 @@ class _LyricsPeekCard extends ConsumerWidget {
     ).toColor();
   }
 
-  /// Ukuran font adaptif berdasarkan rata-rata panjang baris lirik.
+  /// Ukuran font tetap (tidak adaptif) agar tampilan konsisten antar lagu.
   double _adaptiveFontSize(List<String> lines) {
-    if (lines.isEmpty) return 16.0;
-    final avgLen = lines.map((l) => l.length).reduce((a, b) => a + b) / lines.length;
-    if (avgLen <= 20) return 20.0; // baris pendek, tampilkan lebih besar
-    if (avgLen <= 38) return 16.0; // baris standar
-    return 13.5;                   // baris panjang, hindari wrap jelek
+    return 16.0;
   }
 
   List<String> _previewLines(String lyrics) {
@@ -749,6 +713,7 @@ class _LyricsPeekCard extends ConsumerWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 500),
         curve: Curves.easeOut,
+        width: double.infinity,
         decoration: BoxDecoration(
           color: _cardColor,
           borderRadius: BorderRadius.circular(16),
@@ -859,15 +824,15 @@ class _LyricsPeekCard extends ConsumerWidget {
     }
 
     final fontSize = _adaptiveFontSize(lines);
+    // Hapus SizedBox agar tinggi preview fleksibel menyesuaikan layar / lirik
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: lines.asMap().entries.map((e) {
-        // If we have synced lines, highlight the active index
-        // If not synced, highlight the last line (old behavior)
-        final isHighlighted = state.hasSyncedLyrics 
+        final isHighlighted = state.hasSyncedLyrics
             ? (e.key == activeIndex)
             : (e.key == lines.length - 1);
-            
+
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: AnimatedDefaultTextStyle(
@@ -880,7 +845,7 @@ class _LyricsPeekCard extends ConsumerWidget {
               fontWeight: FontWeight.w700,
               height: 1.35,
             ),
-            maxLines: 2,
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
             child: Text(e.value),
           ),

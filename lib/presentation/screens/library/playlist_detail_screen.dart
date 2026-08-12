@@ -168,7 +168,8 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                         onTap: () {
                           ref
                               .read(playerProvider.notifier)
-                              .playSong(displaySongs.first, displaySongs);
+                              .playSong(displaySongs.first, displaySongs,
+                                  source: 'Playlist: ${widget.title}');
                         },
                         child: Container(
                           width: 56,
@@ -207,6 +208,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                       return SongListTile(
                         song: song,
                         queue: displaySongs,
+                        queueSource: 'Playlist: ${widget.title}',
                         trailing: isEditable
                             ? IconButton(
                                 icon: const Icon(

@@ -5,6 +5,7 @@ import '../../../data/models/song_model.dart';
 import '../../providers/app_providers.dart';
 import '../../widgets/common/song_artwork_widget.dart';
 import '../../widgets/player/more_options_sheet.dart';
+import '../../widgets/workout/osm_map_widget.dart';
 import 'workout_history_screen.dart';
 import 'workout_summary_screen.dart';
 
@@ -398,77 +399,39 @@ class _WorkoutActiveScreenState extends ConsumerState<WorkoutActiveScreen>
                         ),
                         const SizedBox(height: 16),
 
-                        // ── Offline GPS Canvas ────────────────────────
+                        // ── OSM Map Canvas (realtime) ─────────────────────
                         ClipRRect(
                           borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            height: 180,
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0A1A0A),
-                              border: Border.all(
-                                  color: Colors.white.withOpacity(0.08)),
-                            ),
-                            child: Stack(
-                              children: [
-                                // Route canvas
-                                workout.routePoints.length > 1
-                                    ? CustomPaint(
-                                        painter: _RoutePainter(
-                                          points: workout.routePoints,
-                                        ),
-                                        size: const Size(double.infinity, 180),
-                                      )
-                                    : Center(
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.gps_fixed_rounded,
-                                              color: AppColors.primary
-                                                  .withOpacity(0.4),
-                                              size: 36,
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              _locationDenied
-                                                  ? 'GPS tidak tersedia'
-                                                  : 'Menunggu sinyal GPS...',
-                                              style: TextStyle(
-                                                color: AppColors.onSurfaceVariant
-                                                    .withOpacity(0.6),
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                            if (!_locationDenied && workout.gpsAccuracy > 0)
-                                              Padding(
-                                                padding: const EdgeInsets.only(top: 4),
-                                                child: Text(
-                                                  'Akurasi: ${workout.gpsAccuracy.toStringAsFixed(0)}m',
-                                                  style: TextStyle(
-                                                    color: workout.gpsAccuracy <= 15
-                                                        ? AppColors.primary
-                                                        : Colors.orangeAccent,
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-
-                                // Live indicator
-                                Positioned(
-                                  bottom: 10,
-                                  left: 12,
+                          child: Stack(
+                            children: [
+                              // Tile OSM + route overlay
+                              OsmMapWidget(
+                                points: workout.routePoints,
+                                height: 200,
+                                showLiveIndicator: true,
+                                isLive: true,
+                              ),
+                              // Badge GPS accuracy (kanan atas)
+                              Positioned(
+                                top: 10,
+                                right: 10,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.65),
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                        color: Colors.white.withOpacity(0.1)),
+                                  ),
                                   child: Row(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
                                       FadeTransition(
                                         opacity: _pulseAnim,
                                         child: Container(
-                                          width: 8,
-                                          height: 8,
+                                          width: 7,
+                                          height: 7,
                                           decoration: BoxDecoration(
                                             color: _locationDenied
                                                 ? Colors.redAccent
@@ -487,7 +450,7 @@ class _WorkoutActiveScreenState extends ConsumerState<WorkoutActiveScreen>
                                         style: TextStyle(
                                           color: workout.gpsAccuracy > 25
                                               ? Colors.orangeAccent
-                                              : AppColors.onSurface,
+                                              : Colors.white,
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -495,8 +458,50 @@ class _WorkoutActiveScreenState extends ConsumerState<WorkoutActiveScreen>
                                     ],
                                   ),
                                 ),
-                              ],
-                            ),
+                              ),
+                              // Overlay "Menunggu GPS" jika belum ada sinyal
+                              if (workout.routePoints.isEmpty && !_locationDenied)
+                                Positioned.fill(
+                                  child: Container(
+                                    color: Colors.black.withOpacity(0.45),
+                                    child: Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.gps_fixed_rounded,
+                                            color: AppColors.primary.withOpacity(0.7),
+                                            size: 32,
+                                          ),
+                                          const SizedBox(height: 6),
+                                          const Text(
+                                            'Menunggu sinyal GPS...',
+                                            style: TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          if (workout.gpsAccuracy > 0)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 4),
+                                              child: Text(
+                                                'Akurasi: ${workout.gpsAccuracy.toStringAsFixed(0)}m',
+                                                style: TextStyle(
+                                                  color: workout.gpsAccuracy <= 15
+                                                      ? AppColors.primary
+                                                      : Colors.orangeAccent,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -554,88 +559,6 @@ class _WorkoutActiveScreenState extends ConsumerState<WorkoutActiveScreen>
     ), // End Scaffold (child of PopScope)
     ); // End PopScope
   }
-}
-
-// ─── Route Painter (Offline Canvas) ───────────────────────────────────────────
-
-class _RoutePainter extends CustomPainter {
-  final List<LatLngPoint> points;
-  const _RoutePainter({required this.points});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (points.length < 2) return;
-
-    // Find bounding box
-    double minLat = points.first.lat, maxLat = points.first.lat;
-    double minLng = points.first.lng, maxLng = points.first.lng;
-    for (final p in points) {
-      if (p.lat < minLat) minLat = p.lat;
-      if (p.lat > maxLat) maxLat = p.lat;
-      if (p.lng < minLng) minLng = p.lng;
-      if (p.lng > maxLng) maxLng = p.lng;
-    }
-
-    final latRange = maxLat - minLat;
-    final lngRange = maxLng - minLng;
-    final rangeMax = latRange > lngRange ? latRange : lngRange;
-    final padding = size.width * 0.1;
-    final drawW = size.width - padding * 2;
-    final drawH = size.height - padding * 2;
-
-    Offset toOffset(LatLngPoint p) {
-      final x = rangeMax > 0
-          ? padding + (p.lng - minLng) / rangeMax * drawW
-          : size.width / 2;
-      final y = rangeMax > 0
-          ? padding + (maxLat - p.lat) / rangeMax * drawH
-          : size.height / 2;
-      return Offset(x, y);
-    }
-
-    // Glow path
-    final glowPaint = Paint()
-      ..color = AppColors.primary.withOpacity(0.25)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 8
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final linePaint = Paint()
-      ..color = AppColors.primary
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final path = Path()..moveTo(toOffset(points.first).dx, toOffset(points.first).dy);
-    for (final p in points.skip(1)) {
-      final o = toOffset(p);
-      path.lineTo(o.dx, o.dy);
-    }
-
-    canvas.drawPath(path, glowPaint);
-    canvas.drawPath(path, linePaint);
-
-    // Current position dot
-    final last = toOffset(points.last);
-    canvas.drawCircle(
-      last,
-      6,
-      Paint()..color = AppColors.primary,
-    );
-    canvas.drawCircle(
-      last,
-      10,
-      Paint()
-        ..color = AppColors.primary.withOpacity(0.3)
-        ..style = PaintingStyle.fill,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_RoutePainter oldDelegate) =>
-      oldDelegate.points.length != points.length;
 }
 
 // ─── Pace Match Player Widget ──────────────────────────────────────────────────

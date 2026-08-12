@@ -144,6 +144,7 @@ def _scrape_track_metadata(spotify_url):
                     'album': album,
                     'cover_url': cover_url,
                     'year': release_year,
+                    'duration_ms': entity.get('duration', 0),
                 }
             else:
                 _add_debug_log("[WARNING] __NEXT_DATA__ not found in response text on attempt {}".format(attempt + 1))
@@ -185,7 +186,7 @@ def _get_itunes_metadata(title, artist):
 
 
 def _get_lyrics(title, artist):
-    """Ambil lirik dari lrclib.net. Return (plain_lyrics, synced_lyrics)."""
+    """Ambil lirik dari lrclib.net. Return (plain_lyrics, synced_lyrics, duration_s)."""
     try:
         import requests
         query_artist = urllib.parse.quote(artist)
@@ -198,10 +199,51 @@ def _get_lyrics(title, artist):
             data = response.json()
             plain = data.get('plainLyrics', 'Lirik tidak ditemukan.')
             synced = data.get('syncedLyrics')
-            return plain, synced
+            duration = data.get('duration', 0)
+            return plain, synced, duration
     except Exception:
-        return 'Lirik tidak ditemukan (network error).', None
-    return 'Lirik tidak ditemukan.', None
+        return 'Lirik tidak ditemukan (network error).', None, 0
+    return 'Lirik tidak ditemukan.', None, 0
+
+def _smart_search_youtube(artist, title, target_duration):
+    """
+    Melakukan pencarian 10 hasil di YouTube dan memilih video 
+    yang durasinya paling mendekati target_duration (dari Spotify / LRCLIB)
+    agar lirik tersinkronisasi dengan sempurna.
+    """
+    import yt_dlp
+    search_query = 'ytsearch10:{} {} MV'.format(artist, title)
+    
+    if target_duration and target_duration > 0:
+        _add_debug_log("Smart Search: Target duration is {}s. Searching top 10 results...".format(target_duration))
+        search_opts = {
+            'quiet': True,
+            'extract_flat': True,
+        }
+        best_url = None
+        min_diff = 999999
+        try:
+            with yt_dlp.YoutubeDL(search_opts) as ydl_search:
+                search_info = ydl_search.extract_info(search_query, download=False)
+                entries = search_info.get('entries', [])
+                for e in entries:
+                    dur = e.get('duration')
+                    if not dur: continue
+                    diff = abs(dur - target_duration)
+                    if diff < min_diff:
+                        min_diff = diff
+                        best_url = e.get('url')
+            
+            if best_url:
+                _add_debug_log("Smart Search: Found best match {} with duration diff {:.1f}s.".format(best_url, min_diff))
+                return best_url
+        except Exception as e:
+            _add_debug_log("[WARNING] Smart search failed: {}".format(e))
+    
+    # Fallback jika target_duration 0 atau pencarian pintar gagal
+    fallback_query = 'ytsearch1:{} {} audio'.format(artist, title)
+    _add_debug_log("Smart Search Fallback: Using {}".format(fallback_query))
+    return fallback_query
 
 
 # ─── Public: get_track_metadata ───────────────────────────────────────────────
@@ -315,7 +357,7 @@ def download_track(spotify_url, download_dir, ffmpeg_path=''):
         _add_debug_log("  iTunes Album: {}".format(itunes_album))
 
     _add_debug_log("Step 3: Fetch lyrics from LRCLIB...")
-    lyrics, synced_lyrics = _get_lyrics(track_info['title'], track_info['artist'])
+    lyrics, synced_lyrics, lrclib_duration = _get_lyrics(track_info['title'], track_info['artist'])
     if lyrics and 'tidak ditemukan' not in lyrics:
         track_info['lyrics'] = lyrics
         _add_debug_log("  Lyrics found.")
@@ -324,6 +366,8 @@ def download_track(spotify_url, download_dir, ffmpeg_path=''):
             _add_debug_log("  Synced lyrics (.lrc format) found.")
     else:
         _add_debug_log("  Lyrics not found or error occurred.")
+
+    track_info['lrclib_duration'] = lrclib_duration
 
     # ── 3. Tentukan folder output ─────────────────────────────────────────────
     # Struktur: Ibnutify/{Album}/song.mp3  (jika ada album)
@@ -403,10 +447,8 @@ def download_track(spotify_url, download_dir, ffmpeg_path=''):
             _add_debug_log("yt-dlp download finished, starting audio post-processing...")
             _set_progress(status='converting', percent=99.0, eta_seconds=0)
 
-    search_query = 'ytsearch1:{} {} audio'.format(
-        track_info['artist'], track_info['title']
-    )
-    _add_debug_log("Search Query: {}".format(search_query))
+    target_duration = track_info.get('lrclib_duration') or (track_info.get('duration_ms', 0) / 1000.0)
+    best_youtube_url = _smart_search_youtube(track_info['artist'], track_info['title'], target_duration)
 
     ydl_opts = {
         'default_search': 'ytsearch1',
@@ -454,7 +496,7 @@ def download_track(spotify_url, download_dir, ffmpeg_path=''):
         _add_debug_log("Step 5: Run yt-dlp YoutubeDL.extract_info...")
         import yt_dlp
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(search_query, download=True)
+            info = ydl.extract_info(best_youtube_url, download=True)
             if info and 'entries' in info and len(info['entries']) > 0:
                 youtube_url = info['entries'][0].get('webpage_url')
             elif info:
@@ -848,12 +890,14 @@ def download_playlist(spotify_url, download_dir, ffmpeg_path=''):
             pass
 
         try:
-            lyrics, synced_lyrics = _get_lyrics(track_info['title'], track_info['artist'])
+            lyrics, synced_lyrics, lrclib_dur = _get_lyrics(track_info['title'], track_info['artist'])
             if lyrics and 'tidak ditemukan' not in lyrics:
                 track_info['lyrics'] = lyrics
                 if synced_lyrics:
                     track_info['synced_lyrics'] = synced_lyrics
+            track_info['lrclib_duration'] = lrclib_dur
         except Exception:
+            track_info['lrclib_duration'] = 0
             pass
 
         # Nama file
@@ -879,9 +923,9 @@ def download_playlist(spotify_url, download_dir, ffmpeg_path=''):
 
         # Build yt-dlp options
         _set_progress(status='downloading', percent=0.0)
-        search_query = 'ytsearch1:{} {} audio'.format(
-            track_info['artist'], track_info['title']
-        )
+        
+        target_duration = track_info.get('lrclib_duration') or (track_info.get('duration_ms', 0) / 1000.0)
+        best_youtube_url = _smart_search_youtube(track_info['artist'], track_info['title'], target_duration)
 
         def _progress_hook(d, _fp=final_filepath):
             status = d.get('status', '')
@@ -936,7 +980,7 @@ def download_playlist(spotify_url, download_dir, ffmpeg_path=''):
             import yt_dlp
             youtube_url = None
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(search_query, download=True)
+                info = ydl.extract_info(best_youtube_url, download=True)
                 if info and 'entries' in info and len(info['entries']) > 0:
                     youtube_url = info['entries'][0].get('webpage_url')
                 elif info:

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>IbnuTify Lyrics View</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"/>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            'spotify-bg': '#1e4072',
+            'spotify-bg-gradient': 'linear-gradient(180deg, #1e4072 0%, #152d50 100%)',
+            'lyrics-active': '#ffffff',
+            'lyrics-inactive': 'rgba(255, 255, 255, 0.6)',
+          }
+        }
+      }
+    }
+  </script>
+<style data-purpose="custom-utilities">
+    /* Hide scrollbar for a cleaner look while keeping functionality if needed */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-[#1e4072] bg-gradient-to-b from-[#1e4072] to-[#152d50] text-white h-screen flex flex-col font-sans overflow-hidden">
+<!-- BEGIN: Top Bar -->
+<header class="flex items-center justify-between px-6 py-6" data-purpose="top-navigation">
+<button aria-label="Minimize player" class="text-white hover:text-gray-300 transition-colors focus:outline-none">
+<i class="fa-solid fa-chevron-down text-xl"></i>
+</button>
+<div class="text-center flex-1 mx-4">
+<h2 class="text-sm font-bold truncate tracking-wide">Rollin'</h2>
+<p class="text-xs text-gray-300 truncate">Brave Girls</p>
+</div>
+<div class="w-6"></div> <!-- Spacer to balance flex -->
+</header>
+<!-- END: Top Bar -->
+<!-- BEGIN: Lyrics Area -->
+<main class="flex-1 overflow-y-auto px-6 py-4 no-scrollbar flex flex-col space-y-6" data-purpose="lyrics-content">
+<!-- Inactive Lyric -->
+<div class="text-[22px] font-semibold text-lyrics-inactive leading-snug">
+      어느새 무너져버려 because of you
+    </div>
+<!-- Active Lyric (Simulated by being higher up in the flow, adjust as needed based on actual implementation) -->
+<div class="text-[22px] font-bold text-lyrics-active leading-snug">
+      온통 너의 생각뿐이야, 나도 미치겠어
+    </div>
+<!-- Inactive Lyrics -->
+<div class="text-[22px] font-semibold text-lyrics-inactive leading-snug">
+      너무 보고 싶어 매일, 매일, 매일
+    </div>
+<div class="text-[22px] font-semibold text-lyrics-inactive leading-snug">
+      자꾸 초라해지잖아 내 모습이
+    </div>
+<div class="text-[22px] font-semibold text-lyrics-inactive leading-snug">
+      그대여 내게 말해줘 사랑한다고
+    </div>
+<div class="text-[22px] font-semibold text-lyrics-inactive leading-snug">
+      Rollin', rollin', rollin' (hey)
+    </div>
+<div class="text-[22px] font-semibold text-lyrics-inactive leading-snug">
+      Rollin', rollin', rollin' (hey)
+    </div>
+<div class="text-[22px] font-semibold text-lyrics-inactive leading-snug">
+      Rollin', rollin', rollin'
+    </div>
+<div class="text-[22px] font-semibold text-lyrics-inactive leading-snug">
+      하루가 멀다 하고 rolling in the deep
+    </div>
+<div class="text-[22px] font-semibold text-lyrics-inactive leading-snug">
+      Rollin', rollin', rollin' (hey)
+    </div>
+<div class="text-[22px] font-semibold text-lyrics-inactive leading-snug">
+      Rollin', rollin', rollin' (hey)
+    </div>
+<div class="text-[22px] font-semibold text-lyrics-inactive leading-snug">
+      기다리고 있잖아, baby
+    </div>
+<div class="text-[22px] font-semibold text-lyrics-inactive leading-snug pb-10">
+      Just only you (ow!)
+    </div>
+</main>
+<!-- END: Lyrics Area -->
+<!-- BEGIN: Bottom Player Controls -->
+<footer class="px-6 pb-6 pt-2 bg-gradient-to-t from-[#152d50] to-transparent" data-purpose="player-controls">
+<!-- Action Icons -->
+<div class="flex justify-between items-center mb-4 text-white">
+<button aria-label="Share" class="hover:text-gray-300 focus:outline-none">
+<i class="fa-solid fa-share-nodes text-xl"></i>
+</button>
+<button aria-label="More options" class="hover:text-gray-300 focus:outline-none">
+<i class="fa-solid fa-ellipsis-vertical text-xl"></i>
+</button>
+</div>
+<!-- Progress Bar -->
+<div class="flex items-center gap-3 mb-6">
+<span class="text-xs text-gray-300 font-medium">0:31</span>
+<div class="flex-1 h-1 bg-white/30 rounded-full relative cursor-pointer" data-purpose="seek-bar">
+<div class="absolute top-0 left-0 h-full bg-white rounded-full w-[15%] flex items-center justify-end">
+<div class="w-3 h-3 bg-white rounded-full translate-x-1/2 shadow-sm"></div>
+</div>
+</div>
+<span class="text-xs text-gray-300 font-medium">3:18</span>
+</div>
+<!-- Playback Controls -->
+<div class="flex justify-center items-center mb-6">
+<!-- Main Play Button -->
+<button aria-label="Play" class="w-16 h-16 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 transition-transform focus:outline-none shadow-lg">
+<i class="fa-solid fa-play text-xl ml-1"></i>
+</button>
+</div>
+</footer>
+<!-- END: Bottom Player Controls -->
+<!-- BEGIN: System Navigation Bar (Simulated Android) -->
+<div class="h-12 bg-black flex justify-around items-center text-white/70" data-purpose="system-nav">
+<button aria-label="Menu" class="focus:outline-none">
+<i class="fa-solid fa-bars text-sm"></i>
+</button>
+<button aria-label="Home" class="focus:outline-none">
+<div class="w-4 h-4 rounded-sm border-2 border-white/70"></div>
+</button>
+<button aria-label="Back" class="focus:outline-none">
+<i class="fa-solid fa-chevron-left text-sm"></i>
+</button>
+</div>
+<!-- END: System Navigation Bar -->
+</body></html>

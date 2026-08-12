@@ -78,8 +78,6 @@ class AlbumArtService {
       final palette = await PaletteGenerator.fromImageProvider(
         MemoryImage(bytes),
         maximumColorCount: 20,
-        // Downsample to 100px for performance — we only need color, not detail
-        size: const Size(100, 100),
       );
 
       // Priority: darkMuted → darkVibrant → muted → dominant → fallback
@@ -159,12 +157,12 @@ class AlbumArtService {
 
   // ─── Private helpers ─────────────────────────────────────────────────────
 
-  /// Clamp raw color luminance to ≤ 0.32 for readable dark backgrounds.
+  /// Clamp raw color luminance for readable backgrounds, but preserve hue identity.
   Color _clampToDark(Color color) {
     final hsl = HSLColor.fromColor(color);
-    if (hsl.lightness <= 0.32) return color;
-    return hsl.withLightness(0.22).withSaturation(
-      (hsl.saturation * 0.85).clamp(0.0, 1.0),
+    if (hsl.lightness <= 0.45) return color;
+    return hsl.withLightness(0.35).withSaturation(
+      (hsl.saturation * 0.9).clamp(0.0, 1.0),
     ).toColor();
   }
 

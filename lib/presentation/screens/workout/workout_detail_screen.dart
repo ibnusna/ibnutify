@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/activity_model.dart';
-import '../../providers/app_providers.dart';
+import '../../providers/app_providers.dart' show LatLngPoint;
+import '../../widgets/workout/osm_map_widget.dart';
 
 /// WorkoutDetailScreen — detail riwayat aktivitas tunggal.
-/// Menampilkan: tracking map GPS (canvas offline) + semua statistik.
+/// Menampilkan: peta OSM realtime + semua statistik aktivitas.
 /// Dipanggil dari WorkoutHistoryScreen saat user tap card riwayat.
 class WorkoutDetailScreen extends StatelessWidget {
   final ActivityModel activity;
@@ -29,7 +30,7 @@ class WorkoutDetailScreen extends StatelessWidget {
   String _formatCreatedAt(String iso) {
     try {
       final dt = DateTime.parse(iso);
-      final months = [
+      const months = [
         '', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
         'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'
       ];
@@ -41,12 +42,9 @@ class WorkoutDetailScreen extends StatelessWidget {
     }
   }
 
-  /// Parse routePoints JSON ke list<LatLngPoint>
   List<LatLngPoint> _parseRoutePoints() {
     final parsed = activity.parsedRoutePoints;
-    return parsed
-        .map((e) => LatLngPoint(e['lat']!, e['lng']!))
-        .toList();
+    return parsed.map((e) => LatLngPoint(e['lat']!, e['lng']!)).toList();
   }
 
   @override
@@ -57,7 +55,7 @@ class WorkoutDetailScreen extends StatelessWidget {
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          // Background gradient
+          // Subtle gradient background
           Positioned(
             top: 0, left: 0, right: 0, height: 260,
             child: DecoratedBox(
@@ -79,7 +77,8 @@ class WorkoutDetailScreen extends StatelessWidget {
               children: [
                 // ── App Bar ───────────────────────────────────────────────
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
                   child: Row(
                     children: [
                       IconButton(
@@ -102,7 +101,7 @@ class WorkoutDetailScreen extends StatelessWidget {
                   ),
                 ),
 
-                // ── Scrollable content ───────────────────────────────────
+                // ── Scrollable content ────────────────────────────────────
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
@@ -149,99 +148,14 @@ class WorkoutDetailScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 20),
 
-                        // ── Route Map Canvas ──────────────────────────────
+                        // ── OSM Map (peta dengan tile OpenStreetMap) ──────
                         ClipRRect(
                           borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            height: 220,
-                            width: double.infinity,
-                            color: const Color(0xFF091209),
-                            child: Stack(
-                              children: [
-                                // Canvas route
-                                routePoints.length > 1
-                                    ? CustomPaint(
-                                        painter: _DetailRoutePainter(
-                                            points: routePoints),
-                                        size: const Size(double.infinity, 220),
-                                      )
-                                    : Center(
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.route_rounded,
-                                              color: AppColors.primary
-                                                  .withOpacity(0.3),
-                                              size: 48,
-                                            ),
-                                            const SizedBox(height: 8),
-                                            const Text(
-                                              'Rute tidak tersedia',
-                                              style: TextStyle(
-                                                color:
-                                                    AppColors.onSurfaceVariant,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-
-                                // Gradient overlay bottom
-                                Positioned(
-                                  bottom: 0, left: 0, right: 0,
-                                  height: 60,
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topCenter,
-                                        end: Alignment.bottomCenter,
-                                        colors: [
-                                          Colors.transparent,
-                                          const Color(0xFF091209).withOpacity(0.7),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-
-                                // Label
-                                Positioned(
-                                  bottom: 10,
-                                  left: 12,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 5),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.surfaceContainerHigh
-                                          .withOpacity(0.9),
-                                      borderRadius: BorderRadius.circular(999),
-                                      border: Border.all(
-                                          color: Colors.white.withOpacity(0.1)),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.my_location_rounded,
-                                            color: AppColors.primary, size: 14),
-                                        const SizedBox(width: 5),
-                                        Text(
-                                          routePoints.length > 1
-                                              ? '${routePoints.length} titik GPS'
-                                              : 'Rute GPS',
-                                          style: const TextStyle(
-                                            color: AppColors.onSurface,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                          child: OsmMapWidget(
+                            points: routePoints,
+                            height: 240,
+                            showLiveIndicator: false,
+                            isLive: false,
                           ),
                         ),
                         const SizedBox(height: 20),
@@ -293,81 +207,6 @@ class WorkoutDetailScreen extends StatelessWidget {
       ),
     );
   }
-}
-
-// ─── Detail Route Painter ─────────────────────────────────────────────────────
-
-class _DetailRoutePainter extends CustomPainter {
-  final List<LatLngPoint> points;
-  const _DetailRoutePainter({required this.points});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (points.length < 2) return;
-
-    double minLat = points.first.lat, maxLat = points.first.lat;
-    double minLng = points.first.lng, maxLng = points.first.lng;
-    for (final p in points) {
-      if (p.lat < minLat) minLat = p.lat;
-      if (p.lat > maxLat) maxLat = p.lat;
-      if (p.lng < minLng) minLng = p.lng;
-      if (p.lng > maxLng) maxLng = p.lng;
-    }
-
-    final latRange = maxLat - minLat;
-    final lngRange = maxLng - minLng;
-    final rangeMax = latRange > lngRange ? latRange : lngRange;
-    const padding = 24.0;
-    final drawW = size.width - padding * 2;
-    final drawH = size.height - padding * 2;
-
-    Offset toOffset(LatLngPoint p) {
-      final x = rangeMax > 0
-          ? padding + (p.lng - minLng) / rangeMax * drawW
-          : size.width / 2;
-      final y = rangeMax > 0
-          ? padding + (maxLat - p.lat) / rangeMax * drawH
-          : size.height / 2;
-      return Offset(x, y);
-    }
-
-    final glowPaint = Paint()
-      ..color = AppColors.primary.withOpacity(0.2)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 10
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final linePaint = Paint()
-      ..color = AppColors.primary
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final path = Path()
-      ..moveTo(toOffset(points.first).dx, toOffset(points.first).dy);
-    for (final p in points.skip(1)) {
-      final o = toOffset(p);
-      path.lineTo(o.dx, o.dy);
-    }
-
-    canvas.drawPath(path, glowPaint);
-    canvas.drawPath(path, linePaint);
-
-    // Start dot (hijau)
-    final start = toOffset(points.first);
-    canvas.drawCircle(start, 5, Paint()..color = AppColors.primary.withOpacity(0.5));
-    canvas.drawCircle(start, 3, Paint()..color = AppColors.primary);
-
-    // End dot
-    final end = toOffset(points.last);
-    canvas.drawCircle(end, 8, Paint()..color = AppColors.primary.withOpacity(0.3));
-    canvas.drawCircle(end, 5, Paint()..color = AppColors.primary);
-  }
-
-  @override
-  bool shouldRepaint(_DetailRoutePainter old) => false;
 }
 
 // ─── Stat Bento Card ──────────────────────────────────────────────────────────
