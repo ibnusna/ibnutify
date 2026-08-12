@@ -6,8 +6,13 @@ import '../../providers/app_providers.dart';
 import '../../providers/lyrics_provider.dart';
 import '../common/song_artwork_widget.dart';
 
-/// Bottom sheet untuk Edit Lagu — 3 tab: Metadata, YouTube URL, Lirik.
+/// Bottom sheet Edit Lagu — 3 tab: Metadata, YouTube URL, Lirik.
 /// Dipanggil dari MoreOptionsSheet via tombol "Edit Lagu".
+///
+/// Fixes:
+/// - Sheet TUTUP otomatis setelah simpan sukses.
+/// - Snackbar muncul di parent scaffold (capture sebelum pop).
+/// - Lirik tab: panel NOW PLAYING real-time untuk monitoring timestamp.
 class EditSongSheet extends ConsumerStatefulWidget {
   final SongModel song;
 
@@ -43,11 +48,12 @@ class _EditSongSheetState extends ConsumerState<EditSongSheet>
     _albumCtrl = TextEditingController(text: widget.song.album);
     _ytCtrl = TextEditingController(text: widget.song.youtubeUrl ?? '');
 
-    // Pre-fill lirik dari state provider
+    // Pre-fill lirik dari state provider jika lagu aktif
     final lyricsState = ref.read(lyricsProvider);
-    final existingLyrics = (lyricsState.songId == widget.song.id && lyricsState.lyrics != null)
-        ? lyricsState.lyrics!
-        : '';
+    final existingLyrics =
+        (lyricsState.songId == widget.song.id && lyricsState.lyrics != null)
+            ? lyricsState.lyrics!
+            : '';
     _lyricsCtrl = TextEditingController(text: existingLyrics);
   }
 
@@ -61,7 +67,9 @@ class _EditSongSheetState extends ConsumerState<EditSongSheet>
     super.dispose();
   }
 
-  // ─── Save Handlers ─────────────────────────────────────────────────────────
+  // ─── Save Handlers ──────────────────────────────────────────────────────────
+  // PENTING: Capture ScaffoldMessenger & Navigator SEBELUM await dan sebelum
+  // Navigator.pop() — karena setelah pop, context tidak lagi valid untuk snackbar.
 
   Future<void> _saveMeta() async {
     final artist = _artistCtrl.text.trim();
@@ -69,47 +77,63 @@ class _EditSongSheetState extends ConsumerState<EditSongSheet>
     if (artist.isEmpty) return;
 
     setState(() => _savingMeta = true);
+
+    // Capture sebelum async
+    final messenger = ScaffoldMessenger.of(context);
+    final nav = Navigator.of(context);
+
     try {
       await ref.read(songsProvider.notifier).updateMetadata(
             widget.song.id,
             artist: artist,
             album: album.isEmpty ? null : album,
           );
-      if (mounted) {
-        _showSnack('Metadata berhasil disimpan');
-      }
+
+      // Tutup sheet DULU, lalu tampilkan snackbar di parent
+      nav.pop();
+      messenger.showSnackBar(_successSnack('✓ Metadata berhasil disimpan'));
     } catch (e) {
-      if (mounted) _showSnack('Gagal menyimpan: $e', isError: true);
-    } finally {
       if (mounted) setState(() => _savingMeta = false);
+      messenger.showSnackBar(_errorSnack('Gagal menyimpan: $e'));
     }
   }
 
   Future<void> _saveYoutube() async {
     final url = _ytCtrl.text.trim();
+
     setState(() => _savingYt = true);
+
+    final messenger = ScaffoldMessenger.of(context);
+    final nav = Navigator.of(context);
+
     try {
       await ref.read(songsProvider.notifier).updateMetadata(
             widget.song.id,
             youtubeUrl: url.isEmpty ? null : url,
           );
-      if (mounted) {
-        _showSnack(url.isEmpty ? 'YouTube URL dihapus' : 'YouTube URL disimpan');
-      }
+
+      nav.pop();
+      messenger.showSnackBar(
+          _successSnack(url.isEmpty ? '✓ YouTube URL dihapus' : '✓ YouTube URL disimpan'));
     } catch (e) {
-      if (mounted) _showSnack('Gagal menyimpan: $e', isError: true);
-    } finally {
       if (mounted) setState(() => _savingYt = false);
+      messenger.showSnackBar(_errorSnack('Gagal menyimpan: $e'));
     }
   }
 
   Future<void> _saveLyrics() async {
     final text = _lyricsCtrl.text.trim();
     if (text.length < 5) {
-      _showSnack('Lirik terlalu pendek', isError: true);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(_errorSnack('Lirik terlalu pendek'));
       return;
     }
+
     setState(() => _savingLyrics = true);
+
+    final messenger = ScaffoldMessenger.of(context);
+    final nav = Navigator.of(context);
+
     try {
       await ref.read(lyricsProvider.notifier).updateLyricsForSong(
             songId: widget.song.id,
@@ -117,40 +141,64 @@ class _EditSongSheetState extends ConsumerState<EditSongSheet>
             artist: widget.song.artist,
             rawInput: text,
           );
-      if (mounted) _showSnack('Lirik berhasil disimpan');
+
+      nav.pop();
+      messenger.showSnackBar(_successSnack('✓ Lirik berhasil disimpan'));
     } catch (e) {
-      if (mounted) _showSnack('Gagal menyimpan: $e', isError: true);
-    } finally {
       if (mounted) setState(() => _savingLyrics = false);
+      messenger.showSnackBar(_errorSnack('Gagal menyimpan: $e'));
     }
   }
 
+  /// Shift timestamp — TIDAK menutup sheet agar user bisa shift berkali-kali
+  /// dan memantau efeknya lewat panel NOW PLAYING real-time di bawah tombol shift.
   Future<void> _shiftTimestamps(double secs) async {
     final lyricsState = ref.read(lyricsProvider);
     if (!lyricsState.hasSyncedLyrics || lyricsState.songId != widget.song.id) {
-      _showSnack('Timestamp hanya tersedia untuk lagu aktif dengan lirik LRC', isError: true);
+      ScaffoldMessenger.of(context).showSnackBar(_errorSnack(
+          'Aktifkan lagu ini dulu & pastikan ada lirik LRC tersinkronisasi'));
       return;
     }
     await ref.read(lyricsProvider.notifier).shiftTimestamps(secs);
     if (mounted) {
-      _showSnack(
-        secs > 0
-            ? 'Semua timestamp maju ${secs.toStringAsFixed(1)}s'
-            : 'Semua timestamp mundur ${(-secs).toStringAsFixed(1)}s',
+      final label = secs > 0
+          ? '+${secs.toStringAsFixed(0)}s — lirik maju'
+          : '${secs.toStringAsFixed(0)}s — lirik mundur';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(label,
+              style: const TextStyle(fontWeight: FontWeight.w700)),
+          backgroundColor: AppColors.primary.withOpacity(0.9),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 900),
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
       );
     }
   }
 
-  void _showSnack(String msg, {bool isError = false}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: isError ? Colors.red.shade800 : AppColors.surfaceVariant,
+  // ─── Snackbar helpers ───────────────────────────────────────────────────────
+
+  SnackBar _successSnack(String msg) => SnackBar(
+        content: Text(msg,
+            style: const TextStyle(fontWeight: FontWeight.w700)),
+        backgroundColor: const Color(0xFF1DB954),
         behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
+        duration: const Duration(seconds: 3),
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      );
+
+  SnackBar _errorSnack(String msg) => SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.red.shade800,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      );
 
   // ─── Build ─────────────────────────────────────────────────────────────────
 
@@ -159,7 +207,7 @@ class _EditSongSheetState extends ConsumerState<EditSongSheet>
     final viewInsets = MediaQuery.of(context).viewInsets;
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.88,
+        maxHeight: MediaQuery.of(context).size.height * 0.9,
       ),
       decoration: const BoxDecoration(
         color: AppColors.surfaceVariant,
@@ -250,7 +298,7 @@ class _EditSongSheetState extends ConsumerState<EditSongSheet>
   }
 }
 
-// ─── Song Header ─────────────────────────────────────────────────────────────
+// ─── Song Header ──────────────────────────────────────────────────────────────
 
 class _SongHeader extends StatelessWidget {
   final SongModel song;
@@ -440,21 +488,30 @@ class _LyricsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final lyricsState = ref.watch(lyricsProvider);
-    final hasSynced = lyricsState.hasSyncedLyrics && lyricsState.songId == song.id;
+    final isActiveSong = lyricsState.songId == song.id;
+    final hasSynced = isActiveSong && lyricsState.hasSyncedLyrics;
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Timestamp Offset Section ─────────────────────────────────────
+          // ── NOW PLAYING real-time panel ───────────────────────────────────
+          // Hanya tampil jika lagu ini sedang aktif — membantu user memonitor
+          // efek shift timestamp tanpa harus menutup sheet.
+          if (isActiveSong) _NowPlayingPanel(song: song),
+          if (isActiveSong) const SizedBox(height: 16),
+
+          // ── Timestamp Offset Section ──────────────────────────────────────
           _FieldLabel('PENYESUAIAN TIMESTAMP'),
           const SizedBox(height: 4),
           Text(
             hasSynced
-                ? 'Geser semua timestamp sekaligus — berguna jika lirik tidak sinkron.'
-                : 'Hanya tersedia saat lagu ini aktif dan memiliki lirik LRC tersinkronisasi.',
+                ? 'Tap untuk geser semua baris sekaligus. Lihat panel di atas untuk hasil real-time.'
+                : isActiveSong
+                    ? 'Lirik LRC belum tersedia untuk lagu ini.'
+                    : 'Aktifkan lagu ini dulu agar timestamp bisa digeser.',
             style: TextStyle(
               color: AppColors.onSurfaceVariant.withOpacity(hasSynced ? 0.7 : 0.4),
               fontSize: 11,
@@ -462,7 +519,7 @@ class _LyricsTab extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           Opacity(
-            opacity: hasSynced ? 1.0 : 0.35,
+            opacity: hasSynced ? 1.0 : 0.3,
             child: IgnorePointer(
               ignoring: !hasSynced,
               child: Wrap(
@@ -472,21 +529,9 @@ class _LyricsTab extends ConsumerWidget {
                   _OffsetChip(label: '−5s', onTap: () => onShift(-5.0)),
                   _OffsetChip(label: '−2s', onTap: () => onShift(-2.0)),
                   _OffsetChip(label: '−1s', onTap: () => onShift(-1.0)),
-                  _OffsetChip(
-                    label: '+1s',
-                    onTap: () => onShift(1.0),
-                    positive: true,
-                  ),
-                  _OffsetChip(
-                    label: '+2s',
-                    onTap: () => onShift(2.0),
-                    positive: true,
-                  ),
-                  _OffsetChip(
-                    label: '+5s',
-                    onTap: () => onShift(5.0),
-                    positive: true,
-                  ),
+                  _OffsetChip(label: '+1s', onTap: () => onShift(1.0), positive: true),
+                  _OffsetChip(label: '+2s', onTap: () => onShift(2.0), positive: true),
+                  _OffsetChip(label: '+5s', onTap: () => onShift(5.0), positive: true),
                 ],
               ),
             ),
@@ -496,7 +541,7 @@ class _LyricsTab extends ConsumerWidget {
           const Divider(color: Colors.white10, height: 1),
           const SizedBox(height: 20),
 
-          // ── Lyrics Text Editor ───────────────────────────────────────────
+          // ── Lyrics Text Editor ────────────────────────────────────────────
           _FieldLabel('TEKS LIRIK'),
           const SizedBox(height: 6),
           Container(
@@ -519,8 +564,7 @@ class _LyricsTab extends ConsumerWidget {
               ),
               cursorColor: AppColors.primary,
               decoration: InputDecoration(
-                hintText:
-                    '[00:10.500]Baris pertama lirik\n[00:14.200]Baris kedua lirik\n\n'
+                hintText: '[00:10.500]Baris pertama lirik\n[00:14.200]Baris kedua lirik\n\n'
                     'atau tanpa timestamp:\nBaris pertama\nBaris kedua',
                 hintStyle: TextStyle(
                   color: Colors.white.withOpacity(0.18),
@@ -563,7 +607,124 @@ class _LyricsTab extends ConsumerWidget {
   }
 }
 
-// ─── Shared Widgets ────────────────────────────────────────────────────────────
+// ─── NOW PLAYING Panel ────────────────────────────────────────────────────────
+// Menampilkan baris lirik yang sedang aktif sesuai posisi playback secara real-time.
+// Dipakai di tab Lirik untuk membantu user memantau efek shift timestamp.
+
+class _NowPlayingPanel extends ConsumerWidget {
+  final SongModel song;
+
+  const _NowPlayingPanel({required this.song});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final position = ref.watch(playerProvider.select((p) => p.position));
+    final lyricsState = ref.watch(lyricsProvider);
+
+    final hasSynced = lyricsState.hasSyncedLyrics &&
+        lyricsState.songId == song.id;
+
+    // Cari baris aktif berdasarkan posisi pemutaran
+    String activeLine = '—';
+    String nextLine = '';
+    if (hasSynced) {
+      final lines = lyricsState.syncedLines!;
+      int activeIndex = -1;
+      for (int i = 0; i < lines.length; i++) {
+        if (position >= lines[i].timestamp) {
+          activeIndex = i;
+        } else {
+          break;
+        }
+      }
+      if (activeIndex >= 0) {
+        activeLine = lines[activeIndex].text.isEmpty ? '♪' : lines[activeIndex].text;
+        if (activeIndex + 1 < lines.length) {
+          nextLine = lines[activeIndex + 1].text;
+        }
+      } else if (lines.isNotEmpty) {
+        activeLine = '— menunggu lirik pertama —';
+      }
+    }
+
+    // Format posisi sebagai mm:ss
+    final totalSecs = position.inSeconds;
+    final mm = (totalSecs ~/ 60).toString().padLeft(2, '0');
+    final ss = (totalSecs % 60).toString().padLeft(2, '0');
+    final posLabel = '$mm:$ss';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Row(
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: hasSynced ? AppColors.primary : AppColors.onSurfaceVariant,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                hasSynced ? 'NOW PLAYING  ·  $posLabel' : 'NOW PLAYING  ·  Tidak ada LRC',
+                style: TextStyle(
+                  color: hasSynced
+                      ? AppColors.primary
+                      : AppColors.onSurfaceVariant.withOpacity(0.5),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Baris aktif
+          Text(
+            hasSynced ? activeLine : '— Putar lagu & pastikan ada lirik LRC —',
+            style: TextStyle(
+              color: hasSynced ? Colors.white : AppColors.onSurfaceVariant.withOpacity(0.4),
+              fontSize: hasSynced ? 15 : 12,
+              fontWeight: FontWeight.w700,
+              height: 1.4,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+
+          // Baris berikutnya (preview)
+          if (hasSynced && nextLine.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              nextLine,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.35),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Shared Widgets ───────────────────────────────────────────────────────────
 
 class _FieldLabel extends StatelessWidget {
   final String text;
