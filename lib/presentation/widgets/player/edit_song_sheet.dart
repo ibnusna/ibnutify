@@ -317,7 +317,7 @@ class _SongHeader extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'Edit Lagu',
                   style: TextStyle(
                     color: AppColors.primary,
@@ -378,7 +378,7 @@ class _MetadataTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _FieldLabel('NAMA ARTIS'),
+          const _FieldLabel('NAMA ARTIS'),
           const SizedBox(height: 6),
           _StyledTextField(
             controller: artistCtrl,
@@ -386,7 +386,7 @@ class _MetadataTab extends StatelessWidget {
             icon: Icons.person_rounded,
           ),
           const SizedBox(height: 16),
-          _FieldLabel('ALBUM'),
+          const _FieldLabel('ALBUM'),
           const SizedBox(height: 6),
           _StyledTextField(
             controller: albumCtrl,
@@ -428,7 +428,7 @@ class _YoutubeTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _FieldLabel('URL YOUTUBE MUSIC VIDEO'),
+          const _FieldLabel('URL YOUTUBE MUSIC VIDEO'),
           const SizedBox(height: 6),
           _StyledTextField(
             controller: ytCtrl,
@@ -504,7 +504,7 @@ class _LyricsTab extends ConsumerWidget {
           if (isActiveSong) const SizedBox(height: 16),
 
           // ── Timestamp Offset Section ──────────────────────────────────────
-          _FieldLabel('PENYESUAIAN TIMESTAMP'),
+          const _FieldLabel('PENYESUAIAN TIMESTAMP'),
           const SizedBox(height: 4),
           Text(
             hasSynced
@@ -542,7 +542,7 @@ class _LyricsTab extends ConsumerWidget {
           const SizedBox(height: 20),
 
           // ── Lyrics Text Editor ────────────────────────────────────────────
-          _FieldLabel('TEKS LIRIK'),
+          const _FieldLabel('TEKS LIRIK'),
           const SizedBox(height: 6),
           Container(
             decoration: BoxDecoration(

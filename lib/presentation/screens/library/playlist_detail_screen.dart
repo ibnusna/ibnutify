@@ -158,7 +158,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                         child: Container(
                           width: 56,
                           height: 56,
-                          decoration: BoxDecoration(
+                          decoration: const BoxDecoration(
                             color: AppColors.surfaceContainerHigh,
                             shape: BoxShape.circle,
                           ),
