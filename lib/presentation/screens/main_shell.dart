@@ -41,6 +41,10 @@ class _MainShellState extends ConsumerState<MainShell> {
     // show the fallback green instead of the real album color.
     ref.watch(albumArtProvider);
 
+    ref.listen<AppScreen>(navigationProvider, (_, __) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    });
+
     final screens = [
       const HomeScreen(),
       const SearchScreen(),
@@ -48,12 +52,14 @@ class _MainShellState extends ConsumerState<MainShell> {
       const AIMoodsScreen(),
     ];
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: IndexedStack(
-        index: currentScreen.index,
-        children: screens,
-      ),
+    return GestureDetector(
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: IndexedStack(
+          index: currentScreen.index,
+          children: screens,
+        ),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -115,6 +121,7 @@ class _MainShellState extends ConsumerState<MainShell> {
           ),
         ],
       ),
+    ),
     );
   }
 }

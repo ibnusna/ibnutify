@@ -64,7 +64,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     final categories = ['All', 'Artists', 'Albums', 'Playlists'];
 
-    return CustomScrollView(
+    return PopScope(
+      onPopInvoked: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+      child: GestureDetector(
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: CustomScrollView(
       slivers: [
         // ── Header ─────────────────────────────────────────────────────────
         SliverToBoxAdapter(
@@ -359,6 +363,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
         const SliverPadding(padding: EdgeInsets.only(bottom: 160)),
       ],
+    ),
+    ),
     );
   }
 

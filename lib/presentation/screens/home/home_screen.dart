@@ -27,22 +27,17 @@ class HomeScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 48, 16, 0),
             child: Row(
               children: [
-                // Avatar (User) -> navigate to Your Library
-                GestureDetector(
-                  onTap: () => ref
-                      .read(navigationProvider.notifier)
-                      .navigate(AppScreen.library),
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.surfaceContainerHigh,
-                      border: Border.all(color: Colors.white.withOpacity(0.1)),
-                    ),
-                    child: const Icon(Icons.person_rounded,
-                        color: AppColors.onSurfaceVariant, size: 18),
+                // Avatar
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.surfaceContainerHigh,
+                    border: Border.all(color: Colors.white.withOpacity(0.1)),
                   ),
+                  child: const Icon(Icons.person_rounded,
+                      color: AppColors.onSurfaceVariant, size: 18),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -81,34 +76,11 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 16),
-                // Timer icon (middle) -> navigate to Recently Played
-                GestureDetector(
-                  onTap: () async {
-                    final recently = await ref
-                        .read(musicRepositoryProvider)
-                        .getRecentlyPlayed24h(limit: 100);
-                    if (context.mounted) {
-                      Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => PlaylistDetailScreen(
-                          title: 'Recently Played',
-                          description: 'Songs played recently',
-                          initialSongs: recently,
-                        ),
-                      ));
-                    }
-                  },
-                  child: const Icon(Icons.timer_rounded,
-                      color: AppColors.onSurfaceVariant, size: 24),
-                ),
+                const Icon(Icons.history_rounded,
+                    color: AppColors.onSurfaceVariant, size: 24),
                 const SizedBox(width: 16),
-                // Settings icon -> navigate to Your Library
-                GestureDetector(
-                  onTap: () => ref
-                      .read(navigationProvider.notifier)
-                      .navigate(AppScreen.library),
-                  child: const Icon(Icons.settings_rounded,
-                      color: AppColors.onSurfaceVariant, size: 24),
-                ),
+                const Icon(Icons.settings_rounded,
+                    color: AppColors.onSurfaceVariant, size: 24),
               ],
             ),
           ),

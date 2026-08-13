@@ -141,7 +141,12 @@ class SongsNotifier extends AsyncNotifier<List<SongModel>> {
 
     final repo = ref.read(musicRepositoryProvider);
     await repo.deleteSong(songId);
-    await refresh();
+    if (state.hasValue) {
+      state = AsyncData(state.value!.where((s) => s.id != songId).toList());
+    }
+    ref.invalidate(duplicateSongsProvider);
+    ref.invalidate(recentlyPlayedProvider);
+    ref.invalidate(topSongsProvider);
   }
 
   Future<SongModel> duplicateSong(SongModel song) async {
@@ -258,6 +263,10 @@ class PlayerNotifier extends Notifier<PlayerState> {
       if (item != null) {
         final songId = item.extras?['songId'] as int?;
         if (songId != null) {
+          // Prevent metadata revert on pause: when paused, do not process mediaItem changes
+          if (!handler.player.playing && state.currentSong != null) {
+            return;
+          }
           final curIdx = handler.player.currentIndex;
           if (curIdx != null && handler.currentQueueItems.length > curIdx) {
             final activeItem = handler.currentQueueItems[curIdx];

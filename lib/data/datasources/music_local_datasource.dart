@@ -70,12 +70,16 @@ class MusicLocalDatasource {
     );
 
     final db = await _db;
+    final deletedRows = await db.query('deleted_songs');
+    final deletedIds = deletedRows.map((r) => r['id'] as int).toSet();
+
     final List<SongModel> result = [];
 
     // Gunakan batch untuk performa insert/update massal
     final batch = db.batch();
 
     for (final song in deviceSongs) {
+      if (deletedIds.contains(song.id)) continue;
       final uri = song.data ?? song.uri ?? '';
       if (uri.isEmpty) continue;
 
@@ -127,8 +131,13 @@ class MusicLocalDatasource {
 
   Future<List<SongModel>> getAllSongs() async {
     final db = await _db;
+    final deletedRows = await db.query('deleted_songs');
+    final deletedIds = deletedRows.map((r) => r['id'] as int).toSet();
     final maps = await db.query('songs', orderBy: 'title ASC');
-    return maps.map((e) => SongModel.fromMap(e)).toList();
+    return maps
+        .map((e) => SongModel.fromMap(e))
+        .where((s) => !deletedIds.contains(s.id))
+        .toList();
   }
 
   /// Top 20 songs based on the new On Repeat logic (highest score).
@@ -391,20 +400,18 @@ class MusicLocalDatasource {
 
   Future<void> deleteSong(int songId) async {
     final db = await _db;
-    final maps = await db.query('songs', where: 'id = ?', whereArgs: [songId]);
-    if (maps.isEmpty) return;
+    await db.insert(
+      'deleted_songs',
+      {'id': songId},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
 
-    // Hapus file fisik via native Kotlin MediaStore (satu-satunya cara yang valid
-    // di Android 10+ untuk menghapus file dari external storage)
     try {
       await _channel.invokeMethod('deleteSong', {'songId': songId});
-    } catch (_) {
-      // Jika MediaStore gagal (file sudah tidak ada), tetap lanjutkan
-      // hapus dari database lokal.
-    }
+    } catch (_) {}
 
-    // Hapus dari SQLite — ON DELETE CASCADE membersihkan play_logs & playlist_songs
     await db.delete('songs', where: 'id = ?', whereArgs: [songId]);
+    await db.delete('playlist_songs', where: 'song_id = ?', whereArgs: [songId]);
   }
 
   // ─── PLAYLISTS ────────────────────────────────────────────────────────────
