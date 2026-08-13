@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:on_audio_query/on_audio_query.dart' as oaq;
 import 'package:sqflite/sqflite.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ibnutify/data/models/song_model.dart';
 import 'package:ibnutify/data/models/playlist_model.dart';
 import 'package:ibnutify/data/datasources/database_helper.dart';
@@ -14,6 +15,38 @@ class MusicLocalDatasource {
   static const _channel = MethodChannel('com.ibnutify.ml/audio');
 
   Future<Database> get _db async => await DatabaseHelper.instance.database;
+
+  // ─── SCHEDULED RESETS (Weekly & 2-Week Cycle) ─────────────────────────────
+
+  /// Checks and executes weekly Monday Daily Mix reset and bi-weekly On Repeat score reset.
+  Future<void> checkAndPerformScheduledResets() async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+
+    // 1. On Repeat Reset (every 2 weeks / 14 days)
+    const onRepeatKey = 'last_on_repeat_reset_ms';
+    final lastOnRepeatMs = prefs.getInt(onRepeatKey) ?? 0;
+    const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
+    if (now.millisecondsSinceEpoch - lastOnRepeatMs >= fourteenDaysMs) {
+      final db = await _db;
+      await db.update('songs', {'score': 0});
+      await prefs.setInt(onRepeatKey, now.millisecondsSinceEpoch);
+    }
+
+    // 2. Daily Mix Reset (weekly starting every Monday)
+    const dailyMixKey = 'last_daily_mix_reset_monday';
+    final mondayOffset = now.weekday - DateTime.monday;
+    final mondayDate = DateTime(now.year, now.month, now.day).subtract(Duration(days: mondayOffset));
+    final currentMondayStr = '${mondayDate.year}-${mondayDate.month.toString().padLeft(2, '0')}-${mondayDate.day.toString().padLeft(2, '0')}';
+    final lastMondayStr = prefs.getString(dailyMixKey);
+
+    if (lastMondayStr != currentMondayStr) {
+      const seedKey = 'daily_mix_seed';
+      final currentSeed = prefs.getInt(seedKey) ?? 0;
+      await prefs.setInt(seedKey, currentSeed + 1);
+      await prefs.setString(dailyMixKey, currentMondayStr);
+    }
+  }
 
   // ─── SCANNING ─────────────────────────────────────────────────────────────
 
@@ -336,6 +369,22 @@ class MusicLocalDatasource {
     return Map.fromEntries(
       groups.entries.where((e) => e.value.length > 1),
     );
+  }
+
+  // ─── DUPLICATE SONG ────────────────────────────────────────────────────────
+
+  Future<SongModel> duplicateSong(SongModel song) async {
+    final db = await _db;
+    final newId = (DateTime.now().millisecondsSinceEpoch % 2000000000).abs();
+    final copy = song.copyWith(
+      id: newId,
+      title: '${song.title} (Copy)',
+      addedAt: DateTime.now().millisecondsSinceEpoch,
+      playCount: 0,
+      score: 0,
+    );
+    await db.insert('songs', copy.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    return copy;
   }
 
   // ─── DELETE SONG ──────────────────────────────────────────────────────────

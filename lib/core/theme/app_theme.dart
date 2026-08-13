@@ -110,6 +110,19 @@ class AppTheme {
         trackHeight: 3,
         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
       ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: AppColors.primary,
+        contentTextStyle: const TextStyle(
+          color: Colors.black,
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
+        ),
+        actionTextColor: Colors.black,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
     );
   }
 }

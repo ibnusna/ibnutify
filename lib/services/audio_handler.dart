@@ -345,6 +345,10 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
     _lastPositionSecs = 0;
     _hasLoggedCurrentSong = false;
     _totalDurationSecs = newItem.duration?.inSeconds ?? 0;
+
+    if (songId != null) {
+      _localDatasource.incrementPlayCount(songId);
+    }
   }
 
   void _recordPlayLogIfNeeded() {
@@ -386,7 +390,7 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
       updatePosition: _player.position,
       bufferedPosition: _player.bufferedPosition,
       speed: _player.speed,
-      queueIndex: event?.currentIndex ?? _player.currentIndex,
+      queueIndex: _player.currentIndex ?? (_lastIndex >= 0 ? _lastIndex : null),
     );
     playbackState.add(state);
   }

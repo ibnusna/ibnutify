@@ -183,7 +183,7 @@ class _EditSongSheetState extends ConsumerState<EditSongSheet>
 
   SnackBar _successSnack(String msg) => SnackBar(
         content: Text(msg,
-            style: const TextStyle(fontWeight: FontWeight.w700)),
+            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
         backgroundColor: const Color(0xFF1DB954),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 3),

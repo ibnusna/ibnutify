@@ -531,16 +531,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     );
   }
 
-  Widget _artistPlaceholder() {
-    return Container(
-      width: 56,
-      height: 56,
-      color: AppColors.surfaceContainerHigh,
-      child: const Icon(Icons.person_rounded,
-          color: AppColors.onSurfaceVariant),
-    );
-  }
-
   Widget _buildAlbumsView(List<SongModel> allSongs) {
     final albumsMap = <String, List<SongModel>>{};
     for (var s in allSongs) {
@@ -599,15 +589,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           },
         );
       },
-    );
-  }
-
-  Widget _albumPlaceholder() {
-    return Container(
-      width: 56,
-      height: 56,
-      color: AppColors.surfaceContainerHigh,
-      child: const Icon(Icons.album_rounded, color: AppColors.onSurfaceVariant),
     );
   }
 

@@ -121,17 +121,6 @@ class LyricsApiService {
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
 
-  /// Strips LRC timestamp tags from synced lyrics: [mm:ss.xx]
-  String _stripLrcTimestamps(String lrc) {
-    return lrc
-        .replaceAll(RegExp(r'\[\d+:\d+(?:\.\d+)?\]'), '')
-        .replaceAll(RegExp(r'^\s*$', multiLine: true), '')
-        .split('\n')
-        .where((l) => l.trim().isNotEmpty)
-        .join('\n')
-        .trim();
-  }
-
   /// Light clean of API lyrics response.
   String? _cleanApiLyrics(String raw) {
     final cleaned = raw

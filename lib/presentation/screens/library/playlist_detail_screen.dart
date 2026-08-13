@@ -145,8 +145,11 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('${displaySongs.length} lagu ditambahkan ke antrean'),
-                                backgroundColor: AppColors.surfaceVariant,
+                                content: Text(
+                                  '${displaySongs.length} lagu ditambahkan ke antrean',
+                                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w700),
+                                ),
+                                backgroundColor: AppColors.primary,
                                 behavior: SnackBarBehavior.floating,
                               ),
                             );
@@ -216,10 +219,23 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                                   color: AppColors.onSurfaceVariant,
                                   size: 20,
                                 ),
-                                onPressed: () {
-                                  ref
+                                onPressed: () async {
+                                  await ref
                                       .read(playlistsProvider.notifier)
                                       .removeSong(widget.playlistId!, song.id);
+                                  await _loadLiveSongs();
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          '"${song.title}" dihapus dari playlist',
+                                          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w700),
+                                        ),
+                                        backgroundColor: AppColors.primary,
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  }
                                 },
                               )
                             : null,

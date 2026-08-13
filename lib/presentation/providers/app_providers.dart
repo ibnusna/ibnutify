@@ -55,6 +55,7 @@ class SongsNotifier extends AsyncNotifier<List<SongModel>> {
   @override
   Future<List<SongModel>> build() async {
     final repo = ref.watch(musicRepositoryProvider);
+    await repo.checkAndPerformScheduledResets();
     final cached = await repo.getAllSongs();
 
     // Auto incremental scan di background
@@ -141,6 +142,14 @@ class SongsNotifier extends AsyncNotifier<List<SongModel>> {
     final repo = ref.read(musicRepositoryProvider);
     await repo.deleteSong(songId);
     await refresh();
+  }
+
+  Future<SongModel> duplicateSong(SongModel song) async {
+    final repo = ref.read(musicRepositoryProvider);
+    final copy = await repo.duplicateSong(song);
+    await refresh();
+    ref.invalidate(duplicateSongsProvider);
+    return copy;
   }
 
   /// Update metadata lagu (artist, album, youtubeUrl) yang bisa diedit user.
@@ -249,9 +258,19 @@ class PlayerNotifier extends Notifier<PlayerState> {
       if (item != null) {
         final songId = item.extras?['songId'] as int?;
         if (songId != null) {
+          final curIdx = handler.player.currentIndex;
+          if (curIdx != null && handler.currentQueueItems.length > curIdx) {
+            final activeItem = handler.currentQueueItems[curIdx];
+            final activeSongId = activeItem.extras?['songId'] as int?;
+            if (activeSongId != null && activeSongId != songId) {
+              // Ignore spurious mediaItem broadcast (e.g. native AudioService reset on pause)
+              return;
+            }
+          }
           // Reset tracking for new song
           _trackingId = songId;
           _syncCurrentSongFromCache(songId);
+          ref.invalidate(recentlyPlayedProvider);
         }
       }
     });
@@ -863,6 +882,14 @@ final topSongsProvider = FutureProvider<List<SongModel>>((ref) async {
 final duplicateSongsProvider = FutureProvider<Map<String, List<SongModel>>>((ref) async {
   ref.watch(songsProvider);
   return await ref.read(musicRepositoryProvider).getDuplicateSongs();
+});
+
+final randomHomeSongsProvider = Provider<List<SongModel>>((ref) {
+  final songsAsync = ref.watch(songsProvider);
+  final songs = songsAsync.value ?? [];
+  if (songs.isEmpty) return [];
+  final copy = List<SongModel>.from(songs)..shuffle();
+  return copy.take(6).toList();
 });
 
 class NamedPlaylist {

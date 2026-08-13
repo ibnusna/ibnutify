@@ -183,46 +183,14 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                                         color: AppColors.onSurface, size: 32),
                                     onPressed: () => Navigator.of(context).pop(),
                                   ),
-                                  Column(
-                                    children: [
-                                      const Text(
-                                        'NOW PLAYING',
-                                        style: TextStyle(
-                                          color: AppColors.onSurface,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 2,
-                                        ),
-                                      ),
-                                      if (!albumArtState.isLoading)
-                                        Padding(
-                                          padding: const EdgeInsets.only(top: 4),
-                                          child: Container(
-                                            width: 4,
-                                            height: 4,
-                                            decoration: BoxDecoration(
-                                              color: albumArtState.dominantColor
-                                                  .withOpacity(0.8),
-                                              shape: BoxShape.circle,
-                                            ),
-                                          ),
-                                        ),
-                                      if (playerState.queueSource != null)
-                                        Padding(
-                                          padding: const EdgeInsets.only(top: 2),
-                                          child: Text(
-                                            playerState.queueSource!,
-                                            style: TextStyle(
-                                              color: Colors.white.withOpacity(0.55),
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w600,
-                                              letterSpacing: 0.5,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                    ],
+                                  const Text(
+                                    'NOW PLAYING',
+                                    style: TextStyle(
+                                      color: AppColors.onSurface,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 2,
+                                    ),
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.more_vert_rounded,
@@ -841,7 +809,7 @@ class _LyricsPeekCard extends ConsumerWidget {
               color: isHighlighted
                   ? Colors.white
                   : Colors.white.withOpacity(0.55),
-              fontSize: fontSize,
+              fontSize: isHighlighted ? fontSize + 4 : fontSize,
               fontWeight: FontWeight.w700,
               height: 1.35,
             ),

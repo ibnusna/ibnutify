@@ -10,9 +10,7 @@ import 'presentation/screens/main_shell.dart';
 import 'services/audio_handler.dart';
 
 Future<void> main() async {
-  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
-  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
-
+  WidgetsFlutterBinding.ensureInitialized();
   try {
     // Load .env for Gemini API key
     await dotenv.load(fileName: '.env');

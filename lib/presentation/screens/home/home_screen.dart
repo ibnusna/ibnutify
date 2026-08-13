@@ -27,17 +27,22 @@ class HomeScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 48, 16, 0),
             child: Row(
               children: [
-                // Avatar
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.surfaceContainerHigh,
-                    border: Border.all(color: Colors.white.withOpacity(0.1)),
+                // Avatar (User) -> navigate to Your Library
+                GestureDetector(
+                  onTap: () => ref
+                      .read(navigationProvider.notifier)
+                      .navigate(AppScreen.library),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.surfaceContainerHigh,
+                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                    ),
+                    child: const Icon(Icons.person_rounded,
+                        color: AppColors.onSurfaceVariant, size: 18),
                   ),
-                  child: const Icon(Icons.person_rounded,
-                      color: AppColors.onSurfaceVariant, size: 18),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -76,11 +81,34 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 16),
-                const Icon(Icons.history_rounded,
-                    color: AppColors.onSurfaceVariant, size: 24),
+                // Timer icon (middle) -> navigate to Recently Played
+                GestureDetector(
+                  onTap: () async {
+                    final recently = await ref
+                        .read(musicRepositoryProvider)
+                        .getRecentlyPlayed24h(limit: 100);
+                    if (context.mounted) {
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => PlaylistDetailScreen(
+                          title: 'Recently Played',
+                          description: 'Songs played recently',
+                          initialSongs: recently,
+                        ),
+                      ));
+                    }
+                  },
+                  child: const Icon(Icons.timer_rounded,
+                      color: AppColors.onSurfaceVariant, size: 24),
+                ),
                 const SizedBox(width: 16),
-                const Icon(Icons.settings_rounded,
-                    color: AppColors.onSurfaceVariant, size: 24),
+                // Settings icon -> navigate to Your Library
+                GestureDetector(
+                  onTap: () => ref
+                      .read(navigationProvider.notifier)
+                      .navigate(AppScreen.library),
+                  child: const Icon(Icons.settings_rounded,
+                      color: AppColors.onSurfaceVariant, size: 24),
+                ),
               ],
             ),
           ),
@@ -155,7 +183,7 @@ class HomeScreen extends ConsumerWidget {
               data: (songs) {
                 final castSongs = songs.cast<SongModel>();
                 if (castSongs.isEmpty) return const SizedBox.shrink();
-                final gridSongs = castSongs.take(6).toList();
+                final gridSongs = ref.watch(randomHomeSongsProvider);
                 return GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -186,9 +214,6 @@ class HomeScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 28, 16, 0),
             child: Consumer(
               builder: (context, ref, child) {
-                final recentlyAsync = ref.watch(recentlyPlayedProvider);
-                final songs = recentlyAsync.value ?? [];
-                
                 return Row(
                   children: [
                     const Text(
@@ -200,28 +225,6 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
                     const Spacer(),
-                    if (songs.isNotEmpty) ...[
-                      IconButton(
-                        onPressed: () async {
-                          for (final song in songs.take(8)) {
-                            await ref.read(playerProvider.notifier).addToQueue(song);
-                          }
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Ditambahkan ke antrean'),
-                                backgroundColor: AppColors.surfaceVariant,
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.queue_music_rounded, color: AppColors.primary, size: 22),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                      const SizedBox(width: 16),
-                    ],
                     GestureDetector(
                       onTap: () => ref
                           .read(navigationProvider.notifier)
@@ -291,7 +294,7 @@ class HomeScreen extends ConsumerWidget {
               builder: (context, ref, child) {
                 final topSongsAsync = ref.watch(topSongsProvider);
                 final songs = topSongsAsync.value ?? [];
-                
+
                 return Row(
                   children: [
                     const Text(
@@ -303,26 +306,26 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
                     const Spacer(),
-                    if (songs.isNotEmpty)
-                      IconButton(
-                        onPressed: () async {
-                          for (final song in songs.take(8)) {
-                            await ref.read(playerProvider.notifier).addToQueue(song);
-                          }
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Ditambahkan ke antrean'),
-                                backgroundColor: AppColors.surfaceVariant,
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.queue_music_rounded, color: AppColors.primary, size: 22),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => PlaylistDetailScreen(
+                            title: 'On Repeat',
+                            description: 'Songs you listen to the most.',
+                            initialSongs: songs,
+                          ),
+                        ));
+                      },
+                      child: const Text(
+                        'SHOW ALL',
+                        style: TextStyle(
+                          color: AppColors.onSurfaceVariant,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
                       ),
+                    ),
                   ],
                 );
               },

@@ -17,6 +17,7 @@ class MusicRepository {
 
   // ─── Songs ────────────────────────────────────────────────────────────────
 
+  Future<void> checkAndPerformScheduledResets() => _local.checkAndPerformScheduledResets();
   Future<List<SongModel>> scanDeviceSongs() => _local.scanDeviceSongs();
   Future<List<SongModel>> getAllSongs() => _local.getAllSongs();
   Future<List<SongModel>> getLikedSongs() => _local.getLikedSongs();
@@ -30,6 +31,9 @@ class MusicRepository {
 
   /// Hapus lagu dari storage fisik dan database.
   Future<void> deleteSong(int songId) => _local.deleteSong(songId);
+
+  /// Duplikasi lagu di database.
+  Future<SongModel> duplicateSong(SongModel song) => _local.duplicateSong(song);
 
   // ─── Play Tracking (Smart Scoring) ────────────────────────────────────────
 

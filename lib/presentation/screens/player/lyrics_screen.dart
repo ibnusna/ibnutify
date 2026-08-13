@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../services/album_art_service.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/album_art_provider.dart';
 import '../../providers/lyrics_provider.dart';
-import '../../widgets/common/song_artwork_widget.dart';
 
 /// Full-screen Lyrics view — mirip Samsung Music / Spotify Lyrics UI.
 ///
@@ -36,8 +33,8 @@ class LyricsScreen extends ConsumerStatefulWidget {
 class _LyricsScreenState extends ConsumerState<LyricsScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _gradientCtrl;
-  List<Color> _prevGradient = AlbumArtService.kFallbackGradient;
-  List<Color> _currGradient = AlbumArtService.kFallbackGradient;
+  Color _prevDominant = Colors.black;
+  Color _currDominant = Colors.black;
 
   final ScrollController _scroll = ScrollController();
   double _dragStart = 0;
@@ -53,7 +50,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen>
       if (!mounted) return;
       final art = ref.read(albumArtProvider);
       setState(() {
-        _prevGradient = _currGradient = art.gradientColors;
+        _prevDominant = _currDominant = art.dominantColor;
         _gradientCtrl.value = 1.0;
       });
     });
@@ -66,9 +63,9 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen>
     super.dispose();
   }
 
-  void _animateGradient(List<Color> next) {
-    _prevGradient = _currGradient;
-    _currGradient = next;
+  void _animateDominantColor(Color next) {
+    _prevDominant = _currDominant;
+    _currDominant = next;
     _gradientCtrl.forward(from: 0);
   }
 
@@ -79,8 +76,8 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen>
     final albumArt = ref.watch(albumArtProvider);
 
     ref.listen<AlbumArtState>(albumArtProvider, (prev, next) {
-      if (prev?.gradientColors != next.gradientColors) {
-        _animateGradient(next.gradientColors);
+      if (prev?.dominantColor != next.dominantColor) {
+        _animateDominantColor(next.dominantColor);
       }
     });
 
@@ -101,49 +98,26 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen>
               animation: _gradientCtrl,
               builder: (_, __) {
                 final t = Curves.easeInOut.transform(_gradientCtrl.value);
-                final blended = List.generate(
-                  _currGradient.length,
-                  (i) => Color.lerp(
-                    i < _prevGradient.length ? _prevGradient[i] : _prevGradient.last,
-                    _currGradient[i],
-                    t,
-                  )!,
-                );
-                final topColor = blended.first;
-                return Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      stops: const [0.0, 0.4, 1.0],
-                      colors: [
-                        topColor,
-                        _darken(topColor, 0.3),
-                        const Color(0xFF121212),
-                      ],
-                    ),
+                final topColor = Color.lerp(_prevDominant, _currDominant, t)!;
+                
+                final hsl = HSLColor.fromColor(topColor);
+                final solidColor = HSLColor.fromAHSL(
+                  1.0,
+                  hsl.hue,
+                  (hsl.saturation * 0.75).clamp(0.25, 0.85),
+                  (hsl.lightness * 0.40).clamp(0.10, 0.30),
+                ).toColor();
+
+                return Hero(
+                  tag: 'lyrics_background',
+                  child: Container(
+                    color: solidColor,
                   ),
                 );
               },
             ),
 
-            // ── Scrim overlay untuk keterbacaan teks ──────────────────────────
-            // Opacity dikurangi agar warna dinamis album art tetap visible.
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withOpacity(0.1),
-                      Colors.black.withOpacity(0.2),
-                      Colors.transparent, // Fade out scrim at the bottom to reveal dark background
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            // (Removed Scrim Overlay as it darkens the solid color)
 
             // ── Main content ──────────────────────────────────────────────────
             SafeArea(
@@ -189,12 +163,6 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen>
     );
   }
 
-  Color _darken(Color c, double factor) {
-    final hsl = HSLColor.fromColor(c);
-    return hsl
-        .withLightness((hsl.lightness * factor).clamp(0.0, 1.0))
-        .toColor();
-  }
 }
 
 // ─── Header ───────────────────────────────────────────────────────────────────
@@ -358,18 +326,28 @@ class _LyricsViewState extends ConsumerState<_LyricsView> {
     _lineKeys = List.generate(count, (_) => GlobalKey());
   }
 
+  bool _isFirstBuild = true;
+
   /// Scroll ke baris lirik yang sedang aktif.
   void _scrollToActive() {
     if (_activeIndex < 0 || _activeIndex >= _lineKeys.length) return;
     final key = _lineKeys[_activeIndex];
     final ctx = key.currentContext;
     if (ctx != null) {
-      Scrollable.ensureVisible(
-        ctx,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
-        alignment: 0.3,
-      );
+      if (_isFirstBuild) {
+        Scrollable.ensureVisible(
+          ctx,
+          alignment: 0.3,
+        );
+        _isFirstBuild = false;
+      } else {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut,
+          alignment: 0.3,
+        );
+      }
     }
   }
 
@@ -428,17 +406,16 @@ class _LyricsViewState extends ConsumerState<_LyricsView> {
                   final isActive = i == _activeIndex;
                   return Padding(
                     key: _lineKeys[i],
-                    padding: const EdgeInsets.only(bottom: 24),
+                    padding: const EdgeInsets.only(bottom: 10), // match preview spacing
                     child: AnimatedDefaultTextStyle(
                       duration: const Duration(milliseconds: 300),
-                      style: GoogleFonts.plusJakartaSans(
+                      style: TextStyle(
                         color: isActive
-                            ? const Color(0xFFFFFFFF)
-                            : const Color(0xFFFFFFFF).withOpacity(0.55),
-                        fontSize: isActive ? 28 : 24,
-                        fontWeight: isActive ? FontWeight.w800 : FontWeight.w700,
-                        height: 1.5,
-                        letterSpacing: isActive ? 28 * -0.02 : 24 * -0.02,
+                            ? Colors.white
+                            : Colors.white.withOpacity(0.55),
+                        fontSize: isActive ? 20 : 16,
+                        fontWeight: FontWeight.w700,
+                        height: 1.35,
                       ),
                       child: Text(lines[i].text),
                     ),
@@ -573,15 +550,14 @@ class _LyricParagraph extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 28),
+      padding: const EdgeInsets.only(bottom: 24),
       child: Text(
         text,
-        style: GoogleFonts.plusJakartaSans(
-          color: const Color(0xFFFFFFFF).withOpacity(0.55),
-          fontSize: 17,
-          fontWeight: FontWeight.w600,
-          height: 1.65,
-          letterSpacing: 17 * -0.02,
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.55),
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          height: 1.35,
         ),
       ),
     );

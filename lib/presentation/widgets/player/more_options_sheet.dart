@@ -97,8 +97,11 @@ class MoreOptionsSheet extends ConsumerWidget {
                 ref.read(playerProvider.notifier).addToQueue(song);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('"${song.title}" ditambahkan ke antrean'),
-                    backgroundColor: AppColors.surfaceVariant,
+                    content: Text(
+                      '"${song.title}" ditambahkan ke antrean',
+                      style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w700),
+                    ),
+                    backgroundColor: AppColors.primary,
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
@@ -110,6 +113,26 @@ class MoreOptionsSheet extends ConsumerWidget {
               onTap: () {
                 Navigator.pop(context);
                 _showAddToPlaylistSheet(context, ref, song);
+              },
+            ),
+            _OptionTile(
+              icon: Icons.copy_rounded,
+              label: 'Duplicate song',
+              onTap: () async {
+                Navigator.pop(context);
+                final copy = await ref.read(songsProvider.notifier).duplicateSong(song);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        '"${copy.title}" berhasil diduplikasi',
+                        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w700),
+                      ),
+                      backgroundColor: AppColors.primary,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
               },
             ),
             _OptionTile(
@@ -149,7 +172,7 @@ class MoreOptionsSheet extends ConsumerWidget {
             ),
             _OptionTile(
               icon: Icons.delete_outline_rounded,
-              label: 'Delete from device',
+              label: 'Remove song',
               isDestructive: true,
               onTap: () {
                 Navigator.pop(context);
