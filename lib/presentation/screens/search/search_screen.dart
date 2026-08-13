@@ -65,7 +65,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final categories = ['All', 'Artists', 'Albums', 'Playlists'];
 
     return PopScope(
-      onPopInvoked: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+      onPopInvokedWithResult: (_, __) => FocusManager.instance.primaryFocus?.unfocus(),
       child: GestureDetector(
         onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
         child: CustomScrollView(
