@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -20,6 +21,7 @@ import 'package:ibnutify/services/health_connect_service.dart';
 import 'package:ibnutify/services/ml_service.dart';
 import 'package:ibnutify/services/download_service.dart';
 import 'package:ibnutify/services/smart_shuffle_service.dart';
+import 'package:ibnutify/services/workout_task_handler.dart';
 
 // ─── Infrastructure Providers ─────────────────────────────────────────────
 
@@ -1410,18 +1412,24 @@ class WorkoutState {
 }
 
 class WorkoutNotifier extends Notifier<WorkoutState> {
-  Timer? _timer;
-  StreamSubscription<Position>? _gpsSub;
   // Bug 4 fix: listener untuk tracking berapa lagu yang diputar
   StreamSubscription? _songTrackingSub;
-  LatLngPoint? _lastPoint;
+
+  // Callback yang terdaftar untuk menerima data dari task isolate
+  late final DataCallback _taskDataCallback;
+
+  // Route points yang di-track di main isolate (sync dari task isolate)
+  final List<LatLngPoint> _routePoints = [];
+  LatLngPoint? _lastKnownPoint;
+
+  // Completer untuk menunggu final state saat stopWorkout()
+  Completer<Map<String, dynamic>>? _finalStateCompleter;
 
   @override
   WorkoutState build() => const WorkoutState();
 
   List<SongModel> _buildBpmQueue(String sportMode) {
     final allSongs = ref.read(songsProvider).value ?? [];
-    // Shuffle untuk variasi lagu
     final shuffled = List<SongModel>.from(allSongs)..shuffle();
     final withBpm = shuffled.where((s) => s.bpm != null).toList();
 
@@ -1434,14 +1442,13 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       // Berlari / Sepeda: BPM >= 120
       filtered = withBpm.where((s) => s.bpm! >= 120).toList();
     }
-    // Fallback: jika tidak ada lagu BPM yang cocok, gunakan semua lagu diacak
     if (filtered.isEmpty) return shuffled;
     return filtered;
   }
 
   /// [Bug 1 Fix] Tambah parameter useCurrentQueue:
-  /// - true  → gunakan antrean musik yang sedang aktif (dari titik 3 / saat ada lagu berjalan)
-  /// - false → buat antrean BPM baru (dari WorkoutHistoryScreen → Baru)
+  /// - true  → gunakan antrean musik yang sedang aktif
+  /// - false → buat antrean BPM baru
   Future<bool> startWorkout(String sportMode, {bool useCurrentQueue = false}) async {
     final granted = await LocationService.instance.requestPermission();
     if (!granted) {
@@ -1449,11 +1456,12 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       return false;
     }
 
-    // Hitung songsPlayed awal berdasarkan apakah ada lagu yang sedang diputar
     final currentPlayerState = ref.read(playerProvider);
     final initialSongsPlayed = (useCurrentQueue && currentPlayerState.currentSong != null) ? 1 : 0;
 
-    // ── 1. Set state DULU agar isRunning = true sebelum GPS/timer aktif ──
+    // ── 1. Set state DULU agar UI update ke isRunning = true ──────────────
+    _routePoints.clear();
+    _lastKnownPoint = null;
     state = WorkoutState(
       sportMode: sportMode,
       isRunning: true,
@@ -1465,18 +1473,16 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       songsPlayed: initialSongsPlayed,
     );
 
-    // ── 2. Mulai/pertahankan pemutaran musik ──
+    // ── 2. Mulai/pertahankan pemutaran musik ──────────────────────────────
     if (!useCurrentQueue) {
-      // Mode baru: buat antrean BPM dan mulai putar dari awal
       final bpmQueue = _buildBpmQueue(sportMode);
       if (bpmQueue.isNotEmpty) {
         unawaited(ref.read(playerProvider.notifier).playSong(bpmQueue.first, bpmQueue));
         state = state.copyWith(songsPlayed: 1);
       }
     }
-    // Jika useCurrentQueue=true, musik yang sedang berjalan dibiarkan, tidak diganti.
 
-    // ── 3. [Bug 4 Fix] Mulai tracking pergantian lagu via mediaItem stream ──
+    // ── 3. [Bug 4 Fix] Track pergantian lagu via mediaItem stream ─────────
     _songTrackingSub?.cancel();
     String? _lastTrackedMediaId;
     _songTrackingSub = ref.read(audioHandlerProvider).mediaItem.listen((item) {
@@ -1484,7 +1490,6 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       final newId = item?.id;
       if (newId != null && newId != _lastTrackedMediaId) {
         _lastTrackedMediaId = newId;
-        // Jangan increment di pertama kali (sudah di-set di initialSongsPlayed)
         if (state.songsPlayed > 0) {
           state = state.copyWith(songsPlayed: state.songsPlayed + 1);
         } else {
@@ -1493,8 +1498,8 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       }
     });
 
-    // ── 4. Ambil lokasi awal & mulai GPS stream ──
-    _lastPoint = null;
+    // ── 4. Ambil posisi awal untuk seed task isolate ───────────────────────
+    double? initLat, initLng;
     try {
       final initialPos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
@@ -1502,9 +1507,12 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
           timeLimit: Duration(seconds: 5),
         ),
       );
+      initLat = initialPos.latitude;
+      initLng = initialPos.longitude;
       if (state.isRunning) {
-        final initPoint = LatLngPoint(initialPos.latitude, initialPos.longitude);
-        _lastPoint = initPoint;
+        final initPoint = LatLngPoint(initLat, initLng);
+        _routePoints.add(initPoint);
+        _lastKnownPoint = initPoint;
         state = state.copyWith(
           currentSpeedMs: initialPos.speed < 0 ? 0.0 : initialPos.speed,
           gpsAccuracy: initialPos.accuracy,
@@ -1513,69 +1521,114 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       }
     } catch (_) {}
 
-    _gpsSub = LocationService.instance.startTracking(
-      onPosition: (pos) {
-        // [Bug 5 Fix] Selalu update speed & accuracy, bahkan saat paused
-        // Ini memastikan GPS tetap aktif dan indikator akurasi terus tampil
-        final accuracy = pos.accuracy;
-        final speedMs = pos.speed < 0 ? 0.0 : pos.speed;
-        state = state.copyWith(
-          currentSpeedMs: speedMs,
-          gpsAccuracy: accuracy,
-        );
+    // ── 5. Simpan initial data ke storage untuk task isolate baca ─────────
+    await FlutterForegroundTask.saveData(key: 'sportMode', value: sportMode);
+    await FlutterForegroundTask.saveData(key: 'elapsedSeconds', value: 0);
+    await FlutterForegroundTask.saveData(key: 'distanceKm', value: 0.0);
+    await FlutterForegroundTask.saveData(key: 'isPaused', value: false);
+    if (initLat != null && initLng != null) {
+      await FlutterForegroundTask.saveData(
+        key: 'routePoints',
+        value: jsonEncode([{'lat': initLat, 'lng': initLng}]),
+      );
+    }
 
-        // Skip penambahan jarak & rute saat paused — timer juga berhenti
-        if (state.isPaused) return;
+    // ── 6. Register callback untuk terima update dari task isolate ────────
+    _taskDataCallback = _onTaskData;
+    FlutterForegroundTask.addTaskDataCallback(_taskDataCallback);
 
-        // Hanya skip jika akurasi sangat buruk (> 50m)
-        if (accuracy > 50.0) return;
+    // ── 7. Start Android Foreground Service ───────────────────────────────
+    // Jika service sudah berjalan (restart skenario), update saja
+    final isRunning = await FlutterForegroundTask.isRunningService;
+    if (!isRunning) {
+      await FlutterForegroundTask.startService(
+        serviceId: 1001, // ID unik untuk workout service
+        serviceTypes: [
+          ForegroundServiceTypes.location,
+          ForegroundServiceTypes.health,
+        ],
+        notificationTitle: '$sportMode',
+        notificationText: '00:00 • 0.00km',
+        callback: workoutTaskEntryPoint,
+      );
+    } else {
+      // Service sudah ada (mungkin dari restart) — send command restart
+      FlutterForegroundTask.sendDataToTask({'cmd': 'restart', 'sportMode': sportMode});
+    }
 
-        final newPoint = LatLngPoint(pos.latitude, pos.longitude);
-        double addedKm = 0;
-
-        if (_lastPoint != null) {
-          final rawKm = LocationService.haversineDistance(
-            _lastPoint!.lat, _lastPoint!.lng,
-            newPoint.lat, newPoint.lng,
-          );
-          // Tambahkan jika bergerak >= 1.5m (0.0015 km) untuk kurangi static jitter
-          if (rawKm >= 0.0015 && rawKm < 0.5) {
-            addedKm = rawKm;
-            _lastPoint = newPoint;
-          }
-        } else {
-          _lastPoint = newPoint;
-        }
-
-        final updatedPoints = (addedKm > 0 || state.routePoints.isEmpty)
-            ? [...state.routePoints, newPoint]
-            : state.routePoints;
-
-        state = state.copyWith(
-          distanceKm: state.distanceKm + addedKm,
-          routePoints: updatedPoints,
-        );
-      },
-    );
-
-    // ── 5. Mulai timer ──
-    _startTimer();
     return true;
   }
 
-  void _startTimer() {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      // [Bug 5 Fix] Hanya timer yang berhenti saat pause — GPS tetap jalan (di GPS callback)
-      if (!state.isPaused && state.isRunning) {
-        state = state.copyWith(elapsedSeconds: state.elapsedSeconds + 1);
+  /// Callback dipanggil setiap detik oleh task isolate via FlutterForegroundTask
+  void _onTaskData(Object data) {
+    if (data is! Map) return;
+    final type = data['type'] as String?;
+    if (type != 'workoutUpdate') return;
+
+    final isFinal = data['isFinal'] as bool? ?? false;
+    final elapsedSecs = data['elapsedSeconds'] as int? ?? state.elapsedSeconds;
+    final distKm = (data['distanceKm'] as num?)?.toDouble() ?? state.distanceKm;
+    final speedMs = (data['currentSpeedMs'] as num?)?.toDouble() ?? state.currentSpeedMs;
+    final accuracy = (data['gpsAccuracy'] as num?)?.toDouble() ?? state.gpsAccuracy;
+    final isPaused = data['isPaused'] as bool? ?? state.isPaused;
+    final lastLat = (data['lastLat'] as num?)?.toDouble();
+    final lastLng = (data['lastLng'] as num?)?.toDouble();
+    final routeLength = data['routeLength'] as int? ?? 0;
+
+    // Sync route points dari task isolate ke main isolate
+    if (lastLat != null && lastLng != null) {
+      final newPoint = LatLngPoint(lastLat, lastLng);
+      // Tambahkan titik baru jika berbeda dari terakhir
+      if (_lastKnownPoint == null ||
+          _lastKnownPoint!.lat != newPoint.lat ||
+          _lastKnownPoint!.lng != newPoint.lng) {
+        _lastKnownPoint = newPoint;
+        // Sync _routePoints length ke routeLength dari task
+        if (_routePoints.length < routeLength) {
+          _routePoints.add(newPoint);
+        }
       }
-    });
+    }
+
+    if (isFinal) {
+      // Task isolate kirim snapshot final (saat stop) — restore full route dari JSON
+      final routeJson = data['routePoints'] as String?;
+      if (routeJson != null) {
+        try {
+          final decoded = jsonDecode(routeJson) as List;
+          _routePoints
+            ..clear()
+            ..addAll(decoded.map((e) {
+              final lat = (e['lat'] as num).toDouble();
+              final lng = (e['lng'] as num).toDouble();
+              return LatLngPoint(lat, lng);
+            }));
+        } catch (_) {}
+      }
+      // Complete the completer jika ada yang menunggu stopWorkout()
+      _finalStateCompleter?.complete({
+        'elapsedSeconds': elapsedSecs,
+        'distanceKm': distKm,
+      });
+      return;
+    }
+
+    // Update state UI setiap detik
+    state = state.copyWith(
+      elapsedSeconds: elapsedSecs,
+      distanceKm: distKm,
+      currentSpeedMs: speedMs,
+      gpsAccuracy: accuracy,
+      isPaused: isPaused,
+      routePoints: List.unmodifiable(_routePoints),
+    );
   }
 
   void pauseWorkout() {
-    // Hanya pause timer & musik — GPS tracking tetap berjalan (update speed/accuracy)
     state = state.copyWith(isPaused: true);
+    // Kirim command pause ke task isolate
+    FlutterForegroundTask.sendDataToTask({'cmd': 'pause'});
+    // Pause musik
     final playerState = ref.read(playerProvider);
     if (playerState.isPlaying) {
       ref.read(playerProvider.notifier).togglePlay();
@@ -1584,6 +1637,9 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
 
   void resumeWorkout() {
     state = state.copyWith(isPaused: false);
+    // Kirim command resume ke task isolate
+    FlutterForegroundTask.sendDataToTask({'cmd': 'resume'});
+    // Resume musik
     final playerState = ref.read(playerProvider);
     if (!playerState.isPlaying) {
       ref.read(playerProvider.notifier).togglePlay();
@@ -1591,15 +1647,50 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
   }
 
   Future<WorkoutState> stopWorkout() async {
-    _timer?.cancel();
-    _timer = null;
-    await _gpsSub?.cancel();
-    _gpsSub = null;
-    // Bug 4 fix: cleanup song tracking subscription
+    // Ambil snapshot state saat ini sebelum di-reset
+    final currentState = state;
+
+    // Kirim command stop ke task isolate → task akan kirim final state
+    _finalStateCompleter = Completer<Map<String, dynamic>>();
+    FlutterForegroundTask.sendDataToTask({'cmd': 'stop'});
+
+    // Tunggu final state dari task isolate (max 3 detik)
+    Map<String, dynamic>? finalData;
+    try {
+      finalData = await _finalStateCompleter!.future.timeout(
+        const Duration(seconds: 3),
+      );
+    } catch (_) {
+      // Timeout — gunakan state terakhir yang kita punya
+      finalData = null;
+    }
+
+    // Stop foreground service
+    unawaited(FlutterForegroundTask.stopService());
+
+    // Cleanup
+    FlutterForegroundTask.removeTaskDataCallback(_taskDataCallback);
     await _songTrackingSub?.cancel();
     _songTrackingSub = null;
-    final snapshot = state;
+    await FlutterForegroundTask.clearAllData();
+
+    // Buat snapshot final dengan data terlengkap
+    final finalElapsed = finalData?['elapsedSeconds'] as int? ?? currentState.elapsedSeconds;
+    final finalDist = (finalData?['distanceKm'] as num?)?.toDouble() ?? currentState.distanceKm;
+    final finalRoute = List<LatLngPoint>.unmodifiable(_routePoints);
+
+    final snapshot = currentState.copyWith(
+      elapsedSeconds: finalElapsed,
+      distanceKm: finalDist,
+      routePoints: finalRoute,
+      isRunning: false,
+    );
+
+    // Reset state
+    _routePoints.clear();
+    _lastKnownPoint = null;
     state = const WorkoutState();
+
     return snapshot;
   }
 

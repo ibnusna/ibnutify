@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -11,6 +12,38 @@ import 'services/audio_handler.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ── Inisialisasi FlutterForegroundTask (workout background service) ──
+  // Harus dipanggil sebelum startService(), idealnya di awal main().
+  FlutterForegroundTask.init(
+    androidNotificationOptions: AndroidNotificationOptions(
+      channelId: 'com.ibnutify.workout',
+      channelName: 'IbnuTify Workout',
+      channelDescription: 'GPS workout tracking berjalan di latar belakang',
+      channelImportance: NotificationChannelImportance.LOW,
+      priority: NotificationPriority.LOW,
+      onlyAlertOnce: true,
+      showWhen: false,
+      enableVibration: false,
+      playSound: false,
+    ),
+    iosNotificationOptions: const IOSNotificationOptions(
+      showNotification: true,
+      playSound: false,
+    ),
+    foregroundTaskOptions: ForegroundTaskOptions(
+      // onRepeatEvent dipanggil setiap 1000ms = 1 detik (menggantikan Timer.periodic)
+      eventAction: ForegroundTaskEventAction.repeat(1000),
+      allowWakeLock: true,       // CPU tidak tidur saat screen off
+      allowWifiLock: false,
+      allowAutoRestart: true,    // Auto-restart jika proses dibunuh sistem
+      stopWithTask: false,       // Jangan stop saat task removed (swipe-dismiss app)
+    ),
+  );
+
+  // Init communication port agar main isolate bisa receive data dari task isolate
+  FlutterForegroundTask.initCommunicationPort();
+
   try {
     // Load .env for Gemini API key
     await dotenv.load(fileName: '.env');
