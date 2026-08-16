@@ -85,23 +85,49 @@ class MainActivity: FlutterFragmentActivity() {
                     }
                 }
                 "deleteSong" -> {
-                    val songId = call.argument<Int>("songId")?.toLong()
-                    if (songId == null) {
-                        result.error("INVALID_ARGUMENT", "songId is null", null)
-                        return@setMethodCallHandler
+                    val songIdArg = call.argument<Any>("songId")
+                    val songId = when (songIdArg) {
+                        is Number -> songIdArg.toLong()
+                        is String -> songIdArg.toLongOrNull()
+                        else -> null
                     }
+                    val filePath = call.argument<String>("filePath")
+
                     thread {
                         try {
-                            val contentUri = ContentUris.withAppendedId(
-                                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, songId
-                            )
-                            val deleted = contentResolver.delete(contentUri, null, null)
+                            // 1. Hapus file fisik dari storage jika filePath ada
+                            if (!filePath.isNullOrEmpty()) {
+                                try {
+                                    val file = java.io.File(filePath)
+                                    if (file.exists()) {
+                                        file.delete()
+                                    }
+                                } catch (_: Exception) {}
+                            }
+
+                            // 2. Hapus dari Android MediaStore ContentResolver jika songId ada
+                            if (songId != null) {
+                                try {
+                                    val contentUri = ContentUris.withAppendedId(
+                                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, songId
+                                    )
+                                    contentResolver.delete(contentUri, null, null)
+                                } catch (_: Exception) {}
+                            }
+
+                            // 3. Informasikan Android MediaScanner bahwa file sudah terhapus
+                            if (!filePath.isNullOrEmpty()) {
+                                try {
+                                    android.media.MediaScannerConnection.scanFile(
+                                        applicationContext,
+                                        arrayOf(filePath),
+                                        null
+                                    ) { _, _ -> }
+                                } catch (_: Exception) {}
+                            }
+
                             Handler(Looper.getMainLooper()).post {
-                                if (deleted > 0) {
-                                    result.success(true)
-                                } else {
-                                    result.error("DELETE_FAILED", "File not found or already deleted (id=$songId)", null)
-                                }
+                                result.success(true)
                             }
                         } catch (e: Exception) {
                             Handler(Looper.getMainLooper()).post {

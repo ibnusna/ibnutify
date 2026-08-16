@@ -72,6 +72,11 @@ class MusicLocalDatasource {
     final db = await _db;
     final deletedRows = await db.query('deleted_songs');
     final deletedIds = deletedRows.map((r) => r['id'] as int).toSet();
+    final deletedUris = deletedRows
+        .map((r) => r['uri'] as String?)
+        .where((u) => u != null && u.isNotEmpty)
+        .cast<String>()
+        .toSet();
 
     final List<SongModel> result = [];
 
@@ -79,9 +84,9 @@ class MusicLocalDatasource {
     final batch = db.batch();
 
     for (final song in deviceSongs) {
-      if (deletedIds.contains(song.id)) continue;
       final uri = song.data ?? song.uri ?? '';
       if (uri.isEmpty) continue;
+      if (deletedIds.contains(song.id) || deletedUris.contains(uri)) continue;
 
       final existingList = await db.query('songs', where: 'id = ?', whereArgs: [song.id]);
 
@@ -133,10 +138,15 @@ class MusicLocalDatasource {
     final db = await _db;
     final deletedRows = await db.query('deleted_songs');
     final deletedIds = deletedRows.map((r) => r['id'] as int).toSet();
+    final deletedUris = deletedRows
+        .map((r) => r['uri'] as String?)
+        .where((u) => u != null && u.isNotEmpty)
+        .cast<String>()
+        .toSet();
     final maps = await db.query('songs', orderBy: 'title ASC');
     return maps
         .map((e) => SongModel.fromMap(e))
-        .where((s) => !deletedIds.contains(s.id))
+        .where((s) => !deletedIds.contains(s.id) && !deletedUris.contains(s.uri))
         .toList();
   }
 
@@ -400,14 +410,26 @@ class MusicLocalDatasource {
 
   Future<void> deleteSong(int songId) async {
     final db = await _db;
+    final maps = await db.query('songs', where: 'id = ?', whereArgs: [songId]);
+    String? filePath;
+    if (maps.isNotEmpty) {
+      filePath = maps.first['uri'] as String?;
+    }
+
     await db.insert(
       'deleted_songs',
-      {'id': songId},
+      {
+        'id': songId,
+        if (filePath != null) 'uri': filePath,
+      },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
 
     try {
-      await _channel.invokeMethod('deleteSong', {'songId': songId});
+      await _channel.invokeMethod('deleteSong', {
+        'songId': songId,
+        if (filePath != null) 'filePath': filePath,
+      });
     } catch (_) {}
 
     await db.delete('songs', where: 'id = ?', whereArgs: [songId]);

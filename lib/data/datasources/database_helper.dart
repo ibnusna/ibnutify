@@ -166,7 +166,8 @@ class DatabaseHelper {
     // Tabel Deleted Songs (Soft Delete Blacklist)
     await db.execute('''
       CREATE TABLE IF NOT EXISTS deleted_songs (
-        id INTEGER PRIMARY KEY
+        id INTEGER PRIMARY KEY,
+        uri TEXT
       )
     ''');
   }
