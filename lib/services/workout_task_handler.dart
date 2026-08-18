@@ -138,7 +138,6 @@ class WorkoutTaskHandler extends TaskHandler {
         foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationTitle: 'IbnuTify Workout',
           notificationText: 'GPS aktif di latar belakang',
-          enableLaunchActivity: true,
         ),
       ),
     ).listen(_onPosition);
