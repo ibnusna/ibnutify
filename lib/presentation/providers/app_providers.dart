@@ -1533,28 +1533,33 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       );
     }
 
+    // Request notification permission for Android 13+
+    await FlutterForegroundTask.requestNotificationPermission();
+
+    // Re-initialize communication port to ensure port mapping is active
+    FlutterForegroundTask.initCommunicationPort();
+
     // ── 6. Register callback untuk terima update dari task isolate ────────
     _taskDataCallback = _onTaskData;
     FlutterForegroundTask.addTaskDataCallback(_taskDataCallback);
 
     // ── 7. Start Android Foreground Service ───────────────────────────────
-    // Jika service sudah berjalan (restart skenario), update saja
-    final isRunning = await FlutterForegroundTask.isRunningService;
-    if (!isRunning) {
-      await FlutterForegroundTask.startService(
-        serviceId: 1001, // ID unik untuk workout service
-        serviceTypes: [
-          ForegroundServiceTypes.location,
-          ForegroundServiceTypes.health,
-        ],
-        notificationTitle: '$sportMode',
-        notificationText: '00:00 • 0.00km',
-        callback: workoutTaskEntryPoint,
-      );
-    } else {
-      // Service sudah ada (mungkin dari restart) — send command restart
-      FlutterForegroundTask.sendDataToTask({'cmd': 'restart', 'sportMode': sportMode});
+    // Pastikan service terdahulu di-stop agar isolate baru ter-spawn dengan bersih
+    if (await FlutterForegroundTask.isRunningService) {
+      await FlutterForegroundTask.stopService();
+      await Future.delayed(const Duration(milliseconds: 200));
     }
+
+    await FlutterForegroundTask.startService(
+      serviceId: 1001, // ID unik untuk workout service
+      serviceTypes: [
+        ForegroundServiceTypes.location,
+        ForegroundServiceTypes.health,
+      ],
+      notificationTitle: '$sportMode',
+      notificationText: '00:00 • 0.00km',
+      callback: workoutTaskEntryPoint,
+    );
 
     return true;
   }

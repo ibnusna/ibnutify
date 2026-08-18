@@ -49,7 +49,7 @@
             </intent-filter>
         </receiver>
         <!-- flutter_foreground_task: workout background service -->
-        <service android:name="com.pravera.flutter_foreground_task.service.ForegroundTaskService"
+        <service android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:exported="false"
             android:foregroundServiceType="location|health" />
     </application>

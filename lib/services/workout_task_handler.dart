@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -9,17 +10,11 @@ import 'package:geolocator/geolocator.dart';
 /// WAJIB top-level function (bukan method class) dan annotasi @pragma.
 @pragma('vm:entry-point')
 void workoutTaskEntryPoint() {
+  WidgetsFlutterBinding.ensureInitialized();
   FlutterForegroundTask.setTaskHandler(WorkoutTaskHandler());
 }
 
 /// WorkoutTaskHandler — berjalan di isolate terpisah, dilindungi Android Foreground Service.
-///
-/// Tanggung jawab:
-/// - Menjalankan `Timer.periodic` (1 detik) untuk increment elapsed time
-/// - Melisten GPS stream via Geolocator
-/// - Kirim state update ke main isolate setiap detik via `FlutterForegroundTask.sendDataToMain`
-/// - Update notification text secara realtime (waktu + jarak)
-/// - Terima command pause/resume/stop dari main isolate via `onReceiveData`
 class WorkoutTaskHandler extends TaskHandler {
   // ── Internal state ─────────────────────────────────────────────────────────
   bool _isPaused = false;
@@ -43,6 +38,8 @@ class WorkoutTaskHandler extends TaskHandler {
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
+    WidgetsFlutterBinding.ensureInitialized();
+
     // Baca initial data yang dikirim dari main isolate saat startService
     _sportMode = (await FlutterForegroundTask.getData<String>(key: 'sportMode')) ?? '';
     _elapsedSeconds = (await FlutterForegroundTask.getData<int>(key: 'elapsedSeconds')) ?? 0;
@@ -70,29 +67,30 @@ class WorkoutTaskHandler extends TaskHandler {
       } catch (_) {}
     }
 
+    // Explicit 1-second Dart Timer untuk menjamin kelancaran penambahan durasi
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!_isPaused) {
+        _elapsedSeconds++;
+      }
+
+      // Kirim state update ke main isolate
+      _sendStateToMain();
+
+      // Update notification text setiap detik
+      FlutterForegroundTask.updateService(
+        notificationTitle: _notifTitle,
+        notificationText: _notifText,
+      );
+    });
+
     // Mulai GPS stream
     _startGps();
-
-    // Timer dikelola oleh onRepeatEvent (dipanggil setiap 1 detik oleh framework)
-    // Tidak perlu Timer.periodic manual di sini.
   }
 
-  /// Dipanggil setiap 1 detik oleh flutter_foreground_task framework.
-  /// Ini yang menggantikan Timer.periodic di main isolate.
   @override
   void onRepeatEvent(DateTime timestamp) {
-    if (!_isPaused) {
-      _elapsedSeconds++;
-    }
-
-    // Kirim state update ke main isolate
-    _sendStateToMain();
-
-    // Update notification text setiap detik
-    FlutterForegroundTask.updateService(
-      notificationTitle: _notifTitle,
-      notificationText: _notifText,
-    );
+    // Timer.periodic di onStart menangani update 1 detik secara presisi
   }
 
   @override
@@ -115,12 +113,13 @@ class WorkoutTaskHandler extends TaskHandler {
           notificationTitle: _notifTitle,
           notificationText: 'Dijeda — ${_formatDuration(_elapsedSeconds)}',
         );
+        _sendStateToMain();
         break;
       case 'resume':
         _isPaused = false;
+        _sendStateToMain();
         break;
       case 'stop':
-        // Main isolate minta stop — kirim final state lalu service akan di-stop dari main
         _sendStateToMain(isFinal: true);
         break;
     }
@@ -130,17 +129,14 @@ class WorkoutTaskHandler extends TaskHandler {
 
   void _startGps() {
     _gpsSub?.cancel();
-    _gpsSub = Geolocator.getPositionStream(
-      locationSettings: AndroidSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 0, // Update setiap posisi baru tanpa filter jarak
-        intervalDuration: const Duration(seconds: 2),
-        foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationTitle: 'IbnuTify Workout',
-          notificationText: 'GPS aktif di latar belakang',
+    try {
+      _gpsSub = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 0,
         ),
-      ),
-    ).listen(_onPosition);
+      ).listen(_onPosition, onError: (_) {});
+    } catch (_) {}
   }
 
   void _onPosition(Position pos) {
@@ -151,10 +147,16 @@ class WorkoutTaskHandler extends TaskHandler {
     _gpsAccuracy = accuracy;
 
     // Skip distance update saat paused
-    if (_isPaused) return;
+    if (_isPaused) {
+      _sendStateToMain();
+      return;
+    }
 
     // Skip posisi akurasi sangat buruk (> 50m)
-    if (accuracy > 50.0) return;
+    if (accuracy > 50.0) {
+      _sendStateToMain();
+      return;
+    }
 
     final newPoint = _LatLng(pos.latitude, pos.longitude);
 
@@ -173,6 +175,8 @@ class WorkoutTaskHandler extends TaskHandler {
       _lastPoint = newPoint;
       _routePoints.add({'lat': newPoint.lat, 'lng': newPoint.lng});
     }
+
+    _sendStateToMain();
   }
 
   // ── State Communication ──────────────────────────────────────────────────────
@@ -186,12 +190,9 @@ class WorkoutTaskHandler extends TaskHandler {
       'currentSpeedMs': _currentSpeedMs,
       'gpsAccuracy': _gpsAccuracy,
       'isPaused': _isPaused,
-      // Kirim route points — hanya kirim titik terakhir untuk efisiensi bandwidth
-      // Main isolate track sendiri full route; kita sync hanya delta
       'lastLat': _routePoints.isNotEmpty ? _routePoints.last['lat'] : null,
       'lastLng': _routePoints.isNotEmpty ? _routePoints.last['lng'] : null,
       'routeLength': _routePoints.length,
-      // Kirim full route hanya saat final (untuk save ke DB)
       if (isFinal) 'routePoints': jsonEncode(_routePoints),
     });
   }
