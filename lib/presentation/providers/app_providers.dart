@@ -22,6 +22,8 @@ import 'package:ibnutify/services/ml_service.dart';
 import 'package:ibnutify/services/download_service.dart';
 import 'package:ibnutify/services/smart_shuffle_service.dart';
 import 'package:ibnutify/services/workout_task_handler.dart';
+import 'package:ibnutify/services/sensor_fusion_engine.dart';
+import 'package:ibnutify/services/watch_service.dart';
 
 // ─── Infrastructure Providers ─────────────────────────────────────────────
 
@@ -1321,10 +1323,38 @@ class WorkoutState {
   final bool isPaused;
   final bool locationGranted;
   final int songsPlayed;
-  /// Kecepatan saat ini dalam m/s dari GPS Doppler (lebih akurat dari distance/time)
+  /// Kecepatan saat ini dalam m/s dari GPS Doppler
   final double currentSpeedMs;
   /// Akurasi GPS saat ini dalam meter
   final double gpsAccuracy;
+
+  // ── Sensor Fusion Fields ─────────────────────────────────────────────────
+  /// Total langkah (dari akselerometer peak detection)
+  final int stepCount;
+  /// Cadence realtime dalam langkah/menit (window 10 detik)
+  final double cadenceSpm;
+  /// Aktivitas yang terdeteksi otomatis oleh classifier
+  final String detectedActivity;
+  /// Total elevasi naik dalam meter
+  final double elevationGainM;
+  /// Total elevasi turun dalam meter
+  final double elevationLossM;
+  /// Ketinggian saat ini (GPS + Kalman filter) dalam meter
+  final double currentAltitudeM;
+  /// Estimasi kalori terbakar (Keytel jika HR tersedia, MET sebagai fallback)
+  final double estimatedCalories;
+
+  // ── Heart Rate / Smartwatch Fields ──────────────────────────────────────
+  /// HR saat ini dari smartwatch BLE (0 = tidak tersedia)
+  final int heartRateBpm;
+  /// Zona latihan berdasarkan HR
+  final HrZone currentHrZone;
+  /// Status koneksi smartwatch
+  final bool isWatchConnected;
+  /// Nama perangkat BLE yang terhubung
+  final String watchDeviceName;
+  /// Riwayat HR per update (untuk grafik zona)
+  final List<int> hrHistory;
 
   const WorkoutState({
     this.sportMode = '',
@@ -1337,6 +1367,20 @@ class WorkoutState {
     this.songsPlayed = 0,
     this.currentSpeedMs = 0.0,
     this.gpsAccuracy = 0.0,
+    // Sensor fusion
+    this.stepCount = 0,
+    this.cadenceSpm = 0.0,
+    this.detectedActivity = 'Diam',
+    this.elevationGainM = 0.0,
+    this.elevationLossM = 0.0,
+    this.currentAltitudeM = 0.0,
+    this.estimatedCalories = 0.0,
+    // Heart rate
+    this.heartRateBpm = 0,
+    this.currentHrZone = HrZone.rest,
+    this.isWatchConnected = false,
+    this.watchDeviceName = '',
+    this.hrHistory = const [],
   });
 
   WorkoutState copyWith({
@@ -1350,6 +1394,20 @@ class WorkoutState {
     int? songsPlayed,
     double? currentSpeedMs,
     double? gpsAccuracy,
+    // Sensor fusion
+    int? stepCount,
+    double? cadenceSpm,
+    String? detectedActivity,
+    double? elevationGainM,
+    double? elevationLossM,
+    double? currentAltitudeM,
+    double? estimatedCalories,
+    // Heart rate
+    int? heartRateBpm,
+    HrZone? currentHrZone,
+    bool? isWatchConnected,
+    String? watchDeviceName,
+    List<int>? hrHistory,
   }) =>
       WorkoutState(
         sportMode: sportMode ?? this.sportMode,
@@ -1362,6 +1420,18 @@ class WorkoutState {
         songsPlayed: songsPlayed ?? this.songsPlayed,
         currentSpeedMs: currentSpeedMs ?? this.currentSpeedMs,
         gpsAccuracy: gpsAccuracy ?? this.gpsAccuracy,
+        stepCount: stepCount ?? this.stepCount,
+        cadenceSpm: cadenceSpm ?? this.cadenceSpm,
+        detectedActivity: detectedActivity ?? this.detectedActivity,
+        elevationGainM: elevationGainM ?? this.elevationGainM,
+        elevationLossM: elevationLossM ?? this.elevationLossM,
+        currentAltitudeM: currentAltitudeM ?? this.currentAltitudeM,
+        estimatedCalories: estimatedCalories ?? this.estimatedCalories,
+        heartRateBpm: heartRateBpm ?? this.heartRateBpm,
+        currentHrZone: currentHrZone ?? this.currentHrZone,
+        isWatchConnected: isWatchConnected ?? this.isWatchConnected,
+        watchDeviceName: watchDeviceName ?? this.watchDeviceName,
+        hrHistory: hrHistory ?? this.hrHistory,
       );
 
   /// Pace realtime dari GPS Doppler speed (pos.speed) atau avgPace sebagai fallback.
@@ -1407,6 +1477,12 @@ class WorkoutState {
       distance: distanceKm,
       routePoints: routeJson,
       createdAt: DateTime.now().toIso8601String(),
+      stepCount: stepCount,
+      elevationGainM: elevationGainM,
+      estimatedCalories: estimatedCalories,
+      avgHeartRateBpm: hrHistory.isEmpty
+          ? 0
+          : (hrHistory.reduce((a, b) => a + b) / hrHistory.length).round(),
     );
   }
 }
@@ -1424,6 +1500,10 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
 
   // Completer untuk menunggu final state saat stopWorkout()
   Completer<Map<String, dynamic>>? _finalStateCompleter;
+
+  // ── BLE Heart Rate ────────────────────────────────────────────────────────
+  StreamSubscription<int>? _hrSub;
+  StreamSubscription<WatchState>? _watchStateSub;
 
   @override
   WorkoutState build() => const WorkoutState();
@@ -1561,7 +1641,41 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       callback: workoutTaskEntryPoint,
     );
 
+    // ── 8. BLE Auto-reconnect ke smartwatch terakhir ───────────────────────
+    _subscribeWatchState();
+    unawaited(WatchService.instance.autoConnect());
+
     return true;
+  }
+
+  /// Subscribe ke WatchService untuk sinkronisasi HR ke state dan task isolate.
+  void _subscribeWatchState() {
+    // Watch connection state → update isWatchConnected
+    _watchStateSub?.cancel();
+    _watchStateSub = WatchService.instance.stateStream.listen((ws) {
+      state = state.copyWith(
+        isWatchConnected: ws.isConnected,
+        watchDeviceName: ws.deviceName,
+      );
+      if (!ws.isConnected) {
+        state = state.copyWith(heartRateBpm: 0);
+      }
+    });
+
+    // HR stream → update state + forward ke task isolate
+    _hrSub?.cancel();
+    _hrSub = WatchService.instance.hrStream.listen((bpm) {
+      if (!state.isRunning) return;
+      final newHistory = [...state.hrHistory, bpm];
+      if (newHistory.length > 120) newHistory.removeAt(0); // keep 2h of data
+      state = state.copyWith(
+        heartRateBpm: bpm,
+        currentHrZone: classifyHrZone(bpm),
+        hrHistory: newHistory,
+      );
+      // Forward HR ke task isolate untuk notifikasi dan kalori
+      FlutterForegroundTask.sendDataToTask({'cmd': 'heartRate', 'bpm': bpm});
+    });
   }
 
   /// Callback dipanggil setiap detik oleh task isolate via FlutterForegroundTask
@@ -1580,15 +1694,22 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
     final lastLng = (data['lastLng'] as num?)?.toDouble();
     final routeLength = data['routeLength'] as int? ?? 0;
 
+    // Sensor fusion data dari task isolate
+    final stepCount = data['stepCount'] as int? ?? state.stepCount;
+    final cadenceSpm = (data['cadenceSpm'] as num?)?.toDouble() ?? state.cadenceSpm;
+    final detectedActivity = data['detectedActivity'] as String? ?? state.detectedActivity;
+    final elevationGainM = (data['elevationGainM'] as num?)?.toDouble() ?? state.elevationGainM;
+    final elevationLossM = (data['elevationLossM'] as num?)?.toDouble() ?? state.elevationLossM;
+    final currentAltM = (data['currentAltitudeM'] as num?)?.toDouble() ?? state.currentAltitudeM;
+    final calories = (data['estimatedCalories'] as num?)?.toDouble() ?? state.estimatedCalories;
+
     // Sync route points dari task isolate ke main isolate
     if (lastLat != null && lastLng != null) {
       final newPoint = LatLngPoint(lastLat, lastLng);
-      // Tambahkan titik baru jika berbeda dari terakhir
       if (_lastKnownPoint == null ||
           _lastKnownPoint!.lat != newPoint.lat ||
           _lastKnownPoint!.lng != newPoint.lng) {
         _lastKnownPoint = newPoint;
-        // Sync _routePoints length ke routeLength dari task
         if (_routePoints.length < routeLength) {
           _routePoints.add(newPoint);
         }
@@ -1596,7 +1717,6 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
     }
 
     if (isFinal) {
-      // Task isolate kirim snapshot final (saat stop) — restore full route dari JSON
       final routeJson = data['routePoints'] as String?;
       if (routeJson != null) {
         try {
@@ -1610,10 +1730,12 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
             }));
         } catch (_) {}
       }
-      // Complete the completer jika ada yang menunggu stopWorkout()
       _finalStateCompleter?.complete({
         'elapsedSeconds': elapsedSecs,
         'distanceKm': distKm,
+        'stepCount': stepCount,
+        'elevationGainM': elevationGainM,
+        'estimatedCalories': calories,
       });
       return;
     }
@@ -1626,6 +1748,13 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       gpsAccuracy: accuracy,
       isPaused: isPaused,
       routePoints: List.unmodifiable(_routePoints),
+      stepCount: stepCount,
+      cadenceSpm: cadenceSpm,
+      detectedActivity: detectedActivity,
+      elevationGainM: elevationGainM,
+      elevationLossM: elevationLossM,
+      currentAltitudeM: currentAltM,
+      estimatedCalories: calories,
     );
   }
 
@@ -1677,11 +1806,18 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
     FlutterForegroundTask.removeTaskDataCallback(_taskDataCallback);
     await _songTrackingSub?.cancel();
     _songTrackingSub = null;
+    await _hrSub?.cancel();
+    _hrSub = null;
+    await _watchStateSub?.cancel();
+    _watchStateSub = null;
     await FlutterForegroundTask.clearAllData();
 
     // Buat snapshot final dengan data terlengkap
     final finalElapsed = finalData?['elapsedSeconds'] as int? ?? currentState.elapsedSeconds;
     final finalDist = (finalData?['distanceKm'] as num?)?.toDouble() ?? currentState.distanceKm;
+    final finalSteps = finalData?['stepCount'] as int? ?? currentState.stepCount;
+    final finalElevGain = (finalData?['elevationGainM'] as num?)?.toDouble() ?? currentState.elevationGainM;
+    final finalCalories = (finalData?['estimatedCalories'] as num?)?.toDouble() ?? currentState.estimatedCalories;
     final finalRoute = List<LatLngPoint>.unmodifiable(_routePoints);
 
     final snapshot = currentState.copyWith(
@@ -1689,7 +1825,13 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       distanceKm: finalDist,
       routePoints: finalRoute,
       isRunning: false,
+      stepCount: finalSteps,
+      elevationGainM: finalElevGain,
+      estimatedCalories: finalCalories,
     );
+
+    // Disconnect watch gracefully
+    unawaited(WatchService.instance.disconnect());
 
     // Reset state
     _routePoints.clear();
@@ -1710,6 +1852,18 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
 
 final workoutProvider =
     NotifierProvider<WorkoutNotifier, WorkoutState>(WorkoutNotifier.new);
+
+// ─── Watch Provider ───────────────────────────────────────────────────────────
+
+/// Provides current WatchState for UI (connection status, device name, battery).
+final watchStateProvider = StreamProvider<WatchState>((ref) {
+  return WatchService.instance.stateStream;
+});
+
+/// Provides current heart rate from BLE watch as a stream.
+final watchHrProvider = StreamProvider<int>((ref) {
+  return WatchService.instance.hrStream;
+});
 
 // ─── Activities Provider ──────────────────────────────────────────────────────
 

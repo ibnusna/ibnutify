@@ -6,6 +6,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
 
+import 'sensor_fusion_engine.dart';
+
 /// Entry point untuk task isolate yang dijalankan oleh Android Foreground Service.
 /// WAJIB top-level function (bukan method class) dan annotasi @pragma.
 @pragma('vm:entry-point')
@@ -15,6 +17,7 @@ void workoutTaskEntryPoint() {
 }
 
 /// WorkoutTaskHandler — berjalan di isolate terpisah, dilindungi Android Foreground Service.
+/// Sekarang mengintegrasikan SensorFusionEngine untuk step count, cadence, dan elevasi.
 class WorkoutTaskHandler extends TaskHandler {
   // ── Internal state ─────────────────────────────────────────────────────────
   bool _isPaused = false;
@@ -33,6 +36,12 @@ class WorkoutTaskHandler extends TaskHandler {
 
   // Timer
   Timer? _timer;
+
+  // ── Sensor Fusion ──────────────────────────────────────────────────────────
+  final SensorFusionEngine _sensorFusion = SensorFusionEngine();
+
+  // Heart rate (diterima dari main isolate via BLE)
+  int _heartRateBpm = 0;
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 
@@ -67,6 +76,9 @@ class WorkoutTaskHandler extends TaskHandler {
       } catch (_) {}
     }
 
+    // Mulai SensorFusionEngine (akselerometer + giroskop)
+    _sensorFusion.start(_sportMode);
+
     // Explicit 1-second Dart Timer untuk menjamin kelancaran penambahan durasi
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -97,6 +109,7 @@ class WorkoutTaskHandler extends TaskHandler {
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
     _gpsSub?.cancel();
     _timer?.cancel();
+    _sensorFusion.stop();
     // Kirim snapshot final sebelum destroy
     _sendStateToMain(isFinal: true);
   }
@@ -122,6 +135,11 @@ class WorkoutTaskHandler extends TaskHandler {
       case 'stop':
         _sendStateToMain(isFinal: true);
         break;
+      case 'heartRate':
+        // Update HR dari main isolate (diterima dari BLE WatchService)
+        final bpm = data['bpm'];
+        if (bpm is int) _heartRateBpm = bpm;
+        break;
     }
   }
 
@@ -145,6 +163,16 @@ class WorkoutTaskHandler extends TaskHandler {
 
     _currentSpeedMs = speedMs;
     _gpsAccuracy = accuracy;
+
+    // Trigger sensor fusion update dari setiap posisi GPS
+    _sensorFusion.updateFromGps(
+      altitude: pos.altitude,
+      gpsSpeedMs: speedMs,
+      isPaused: _isPaused,
+      elapsedSeconds: _elapsedSeconds,
+      sportMode: _sportMode,
+      hrBpm: _heartRateBpm.toDouble(),
+    );
 
     // Skip distance update saat paused
     if (_isPaused) {
@@ -182,6 +210,7 @@ class WorkoutTaskHandler extends TaskHandler {
   // ── State Communication ──────────────────────────────────────────────────────
 
   void _sendStateToMain({bool isFinal = false}) {
+    final fusion = _sensorFusion.snapshot;
     FlutterForegroundTask.sendDataToMain({
       'type': 'workoutUpdate',
       'isFinal': isFinal,
@@ -193,6 +222,14 @@ class WorkoutTaskHandler extends TaskHandler {
       'lastLat': _routePoints.isNotEmpty ? _routePoints.last['lat'] : null,
       'lastLng': _routePoints.isNotEmpty ? _routePoints.last['lng'] : null,
       'routeLength': _routePoints.length,
+      // Sensor fusion data
+      'stepCount': fusion.stepCount,
+      'cadenceSpm': fusion.cadenceSpm,
+      'detectedActivity': fusion.detectedActivity,
+      'elevationGainM': fusion.elevationGainM,
+      'elevationLossM': fusion.elevationLossM,
+      'currentAltitudeM': fusion.currentAltitudeM,
+      'estimatedCalories': fusion.estimatedCalories,
       if (isFinal) 'routePoints': jsonEncode(_routePoints),
     });
   }
@@ -201,13 +238,16 @@ class WorkoutTaskHandler extends TaskHandler {
 
   String get _notifTitle {
     final icon = _sportIcon(_sportMode);
-    return '$icon $_sportMode';
+    final hr = _heartRateBpm > 0 ? '  ❤️ ${_heartRateBpm}bpm' : '';
+    return '$icon $_sportMode$hr';
   }
 
   String get _notifText {
     final time = _formatDuration(_elapsedSeconds);
     final dist = _distanceKm.toStringAsFixed(2);
-    return '$time • ${dist}km${_isPaused ? ' • Dijeda' : ''}';
+    final steps = _sensorFusion.snapshot.stepCount;
+    final stepsStr = steps > 0 && _sportMode != 'Sepeda' ? ' • ${steps}lk' : '';
+    return '$time • ${dist}km$stepsStr${_isPaused ? ' • Dijeda' : ''}';
   }
 
   static String _sportIcon(String mode) {

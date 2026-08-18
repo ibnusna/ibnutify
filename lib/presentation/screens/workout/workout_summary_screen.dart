@@ -346,6 +346,42 @@ class _WorkoutSummaryScreenState extends ConsumerState<WorkoutSummaryScreen>
                                   value: '${snap.songsPlayed} Lagu',
                                   label: 'Dimainkan',
                                 ),
+                                _StatBento(
+                                  icon: Icons.directions_walk_rounded,
+                                  iconColor: AppColors.onSurfaceVariant,
+                                  value: snap.sportMode == 'Sepeda'
+                                      ? '--'
+                                      : snap.stepCount.toString(),
+                                  label: 'Langkah',
+                                  valueColor: AppColors.primary,
+                                ),
+                                _StatBento(
+                                  icon: Icons.trending_up_rounded,
+                                  iconColor: const Color(0xFF66BB6A),
+                                  value: '+${snap.elevationGainM.toStringAsFixed(0)} m',
+                                  label: 'Elevasi Naik',
+                                  valueColor: const Color(0xFF66BB6A),
+                                ),
+                                _StatBento(
+                                  icon: Icons.local_fire_department_rounded,
+                                  iconColor: Colors.deepOrangeAccent,
+                                  value: snap.estimatedCalories > 0
+                                      ? '${snap.estimatedCalories.toStringAsFixed(0)} kal'
+                                      : '-- kal',
+                                  label: 'Kalori',
+                                  valueColor: Colors.deepOrangeAccent,
+                                ),
+                                _StatBento(
+                                  icon: Icons.favorite_rounded,
+                                  iconColor: Colors.redAccent,
+                                  value: snap.heartRateBpm > 0
+                                      ? '${snap.heartRateBpm} bpm'
+                                      : '-- bpm',
+                                  label: 'HR Terakhir',
+                                  valueColor: snap.heartRateBpm > 0
+                                      ? Colors.redAccent
+                                      : AppColors.onSurfaceVariant,
+                                ),
                               ],
                             ),
                           ],

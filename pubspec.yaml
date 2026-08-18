@@ -58,6 +58,12 @@ dependencies:
   video_player: ^2.9.5
   flutter_foreground_task: ^9.2.2
 
+  # Sensor Fusion (Accelerometer + Gyroscope)
+  sensors_plus: ^6.1.0
+
+  # BLE Smartwatch Integration
+  flutter_blue_plus: ^1.35.5
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

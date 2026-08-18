@@ -19,7 +19,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _createDB,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -72,6 +72,21 @@ class DatabaseHelper {
                 uri TEXT
               )
             ''');
+          } catch (_) {}
+        }
+        if (oldVersion < 7) {
+          // Add sensor fusion columns to activities table
+          try {
+            await db.execute('ALTER TABLE activities ADD COLUMN step_count INTEGER DEFAULT 0');
+          } catch (_) {}
+          try {
+            await db.execute('ALTER TABLE activities ADD COLUMN elevation_gain_m REAL DEFAULT 0.0');
+          } catch (_) {}
+          try {
+            await db.execute('ALTER TABLE activities ADD COLUMN estimated_calories REAL DEFAULT 0.0');
+          } catch (_) {}
+          try {
+            await db.execute('ALTER TABLE activities ADD COLUMN avg_heart_rate_bpm INTEGER DEFAULT 0');
           } catch (_) {}
         }
       },
@@ -170,7 +185,11 @@ class DatabaseHelper {
         duration INTEGER NOT NULL,
         distance REAL NOT NULL,
         route_points TEXT NOT NULL,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        step_count INTEGER DEFAULT 0,
+        elevation_gain_m REAL DEFAULT 0.0,
+        estimated_calories REAL DEFAULT 0.0,
+        avg_heart_rate_bpm INTEGER DEFAULT 0
       )
     ''');
     // Tabel Deleted Songs (Soft Delete Blacklist)

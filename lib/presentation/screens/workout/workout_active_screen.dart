@@ -8,6 +8,7 @@ import '../../widgets/player/more_options_sheet.dart';
 import '../../widgets/workout/osm_map_widget.dart';
 import 'workout_history_screen.dart';
 import 'workout_summary_screen.dart';
+import 'watch_pairing_sheet.dart';
 
 /// WorkoutActiveScreen — layar pelacakan GPS real-time + Pace Match music.
 /// Dikonversi dari workout_tracking_live/code.html
@@ -278,6 +279,29 @@ class _WorkoutActiveScreenState extends ConsumerState<WorkoutActiveScreen>
                           ),
                         ),
                       const SizedBox(width: 8),
+                      // Watch connect button
+                      IconButton(
+                        tooltip: workout.isWatchConnected
+                            ? workout.watchDeviceName
+                            : 'Hubungkan Smartwatch',
+                        icon: Icon(
+                          workout.isWatchConnected
+                              ? Icons.watch_rounded
+                              : Icons.watch_off_rounded,
+                          color: workout.isWatchConnected
+                              ? AppColors.primary
+                              : AppColors.onSurfaceVariant.withOpacity(0.5),
+                          size: 22,
+                        ),
+                        onPressed: () {
+                          showModalBottomSheet(
+                            context: context,
+                            backgroundColor: Colors.transparent,
+                            isScrollControlled: true,
+                            builder: (_) => const WatchPairingSheet(),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -399,7 +423,11 @@ class _WorkoutActiveScreenState extends ConsumerState<WorkoutActiveScreen>
                         ),
                         const SizedBox(height: 16),
 
-                        // ── OSM Map Canvas (realtime) ─────────────────────
+                         // ── Sensor Fusion Stats Row ───────────────
+                        _SensorStatsRow(workout: workout),
+                        const SizedBox(height: 16),
+
+                        // ── OSM Map Canvas (realtime) ─────────────────
                         ClipRRect(
                           borderRadius: BorderRadius.circular(16),
                           child: Stack(
@@ -750,6 +778,206 @@ class _WorkoutButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ─── Sensor Fusion Stats Row ──────────────────────────────────────────────────
+
+class _SensorStatsRow extends StatelessWidget {
+  final WorkoutState workout;
+  const _SensorStatsRow({required this.workout});
+
+  @override
+  Widget build(BuildContext context) {
+    final showCadence = workout.sportMode != 'Sepeda' && workout.cadenceSpm > 0;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
+      ),
+      child: Column(
+        children: [
+          // Row: Steps / Cadence / Elevation / Calories
+          Row(
+            children: [
+              Expanded(
+                child: _SensorMini(
+                  icon: Icons.directions_walk_rounded,
+                  value: workout.sportMode == 'Sepeda'
+                      ? '--'
+                      : workout.stepCount.toString(),
+                  unit: 'langkah',
+                  color: AppColors.primary,
+                ),
+              ),
+              Container(width: 1, height: 36, color: Colors.white.withOpacity(0.07)),
+              Expanded(
+                child: _SensorMini(
+                  icon: Icons.speed_rounded,
+                  value: showCadence
+                      ? '${workout.cadenceSpm.round()}'
+                      : '--',
+                  unit: 'spm',
+                  color: Colors.orangeAccent,
+                ),
+              ),
+              Container(width: 1, height: 36, color: Colors.white.withOpacity(0.07)),
+              Expanded(
+                child: _SensorMini(
+                  icon: Icons.trending_up_rounded,
+                  value: '+${workout.elevationGainM.toStringAsFixed(0)}',
+                  unit: 'm elev',
+                  color: const Color(0xFF66BB6A),
+                ),
+              ),
+              Container(width: 1, height: 36, color: Colors.white.withOpacity(0.07)),
+              Expanded(
+                child: _SensorMini(
+                  icon: Icons.local_fire_department_rounded,
+                  value: workout.estimatedCalories.toStringAsFixed(0),
+                  unit: 'kal',
+                  color: Colors.deepOrangeAccent,
+                ),
+              ),
+            ],
+          ),
+
+          // Heart Rate row (only shown when watch is connected)
+          if (workout.isWatchConnected || workout.heartRateBpm > 0) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Color(workout.currentHrZone.colorValue).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: Color(workout.currentHrZone.colorValue).withOpacity(0.25),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.favorite_rounded,
+                    color: Color(workout.currentHrZone.colorValue),
+                    size: 16,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    workout.heartRateBpm > 0 ? '${workout.heartRateBpm} bpm' : '-- bpm',
+                    style: TextStyle(
+                      color: Color(workout.currentHrZone.colorValue),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Color(workout.currentHrZone.colorValue).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      workout.currentHrZone.label,
+                      style: TextStyle(
+                        color: Color(workout.currentHrZone.colorValue),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Icon(
+                    Icons.watch_rounded,
+                    color: Color(workout.currentHrZone.colorValue).withOpacity(0.6),
+                    size: 14,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    workout.watchDeviceName.isNotEmpty
+                        ? workout.watchDeviceName
+                        : 'Smartwatch',
+                    style: TextStyle(
+                      color: AppColors.onSurfaceVariant.withOpacity(0.6),
+                      fontSize: 10,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Detected activity badge
+          if (workout.detectedActivity.isNotEmpty &&
+              workout.detectedActivity != 'Diam' &&
+              workout.isRunning) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.sensors_rounded,
+                    color: AppColors.onSurfaceVariant, size: 11),
+                const SizedBox(width: 4),
+                Text(
+                  'Terdeteksi: ${workout.detectedActivity}',
+                  style: const TextStyle(
+                    color: AppColors.onSurfaceVariant,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SensorMini extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String unit;
+  final Color color;
+  const _SensorMini({
+    required this.icon,
+    required this.value,
+    required this.unit,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, color: color.withOpacity(0.7), size: 14),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        Text(
+          unit,
+          style: const TextStyle(
+            color: AppColors.onSurfaceVariant,
+            fontSize: 9,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 }

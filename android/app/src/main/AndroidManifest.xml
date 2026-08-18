@@ -78,6 +78,18 @@
     <!-- Health foreground service type (Android 14+ required for workout apps) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
 
+    <!-- BLE Smartwatch Heart Rate Integration -->
+    <!-- Android 12+ (API 31+): granular BLE permissions -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Android 11 and below -->
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+
     <!-- Android Health Connect -->
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
     <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
