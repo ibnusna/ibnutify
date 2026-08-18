@@ -9,6 +9,7 @@ import '../../widgets/workout/osm_map_widget.dart';
 import 'workout_history_screen.dart';
 import 'workout_summary_screen.dart';
 import 'watch_pairing_sheet.dart';
+import '../../../services/sensor_fusion_engine.dart';
 
 /// WorkoutActiveScreen — layar pelacakan GPS real-time + Pace Match music.
 /// Dikonversi dari workout_tracking_live/code.html
