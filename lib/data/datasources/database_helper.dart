@@ -19,7 +19,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _createDB,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -60,6 +60,16 @@ class DatabaseHelper {
                 distance REAL NOT NULL,
                 route_points TEXT NOT NULL,
                 created_at TEXT NOT NULL
+              )
+            ''');
+          } catch (_) {}
+        }
+        if (oldVersion < 6) {
+          try {
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS deleted_songs (
+                id INTEGER PRIMARY KEY,
+                uri TEXT
               )
             ''');
           } catch (_) {}
