@@ -170,14 +170,53 @@ class WatchService {
     ));
 
     try {
-      await device.connect(timeout: const Duration(seconds: 10));
+      // Bersihkan GATT cache terlebih dahulu.
+      // Ini penting saat device sudah pernah terhubung via Classic BT —
+      // Android menyimpan GATT state lama yang menyebabkan error 133.
+      try {
+        await device.clearGattCache();
+        await Future.delayed(const Duration(milliseconds: 500));
+      } catch (_) {} // clearGattCache bisa gagal di beberapa vendor, abaikan
+
+      // autoConnect:false = direct connect, tidak menunggu device advertise.
+      // Ini WAJIB untuk menghindari error 133 pada Android 12+.
+      await device.connect(
+        timeout: const Duration(seconds: 12),
+        autoConnect: false,
+      );
     } catch (e) {
-      _emit(_state.copyWith(
-        connectionState: WatchConnectionState.error,
-        errorMessage: 'Koneksi gagal: ${e.toString()}',
-      ));
-      return false;
+      final errStr = e.toString();
+      // Error 133 = GATT_ERROR — biasa terjadi jika GATT stack korup atau
+      // device baru saja disconnect. Coba sekali lagi setelah jeda singkat.
+      if (errStr.contains('133') ||
+          errStr.contains('ANDROID_SPECIFIC_ERROR') ||
+          errStr.contains('GATT_ERROR')) {
+        try {
+          await Future.delayed(const Duration(milliseconds: 1500));
+          await device.clearGattCache();
+          await Future.delayed(const Duration(milliseconds: 300));
+          await device.connect(
+            timeout: const Duration(seconds: 12),
+            autoConnect: false,
+          );
+        } catch (e2) {
+          _emit(_state.copyWith(
+            connectionState: WatchConnectionState.error,
+            errorMessage:
+                'Koneksi gagal (GATT error). Matikan Bluetooth 5 detik lalu nyalakan kembali, '
+                'kemudian coba hubungkan lagi.',
+          ));
+          return false;
+        }
+      } else {
+        _emit(_state.copyWith(
+          connectionState: WatchConnectionState.error,
+          errorMessage: 'Koneksi gagal: ${e.toString()}',
+        ));
+        return false;
+      }
     }
+
 
     _device = device;
 

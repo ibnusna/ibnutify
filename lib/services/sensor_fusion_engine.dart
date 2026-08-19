@@ -456,14 +456,15 @@ class SensorFusionEngine {
     _isRunning = true;
     _stepDetector.configureSportMode(sportMode);
 
-    // Subscribe to accelerometer at 50Hz (default)
+    // Subscribe ke accelerometer dengan interval normal (~200ms) untuk background.
+    // uiInterval (~16ms/60Hz) tidak reliable di background isolate (task handler).
     _accelSub = accelerometerEventStream(
-      samplingPeriod: SensorInterval.uiInterval, // ~16ms ≈ 60Hz
+      samplingPeriod: SensorInterval.normalInterval, // 5Hz — cukup untuk step detection
     ).listen(_onAccel, onError: (_) {});
 
-    // Gyroscope — currently collected for future use in motion smoothing
+    // Gyroscope — interval normal untuk efisiensi baterai di background
     _gyroSub = gyroscopeEventStream(
-      samplingPeriod: SensorInterval.uiInterval,
+      samplingPeriod: SensorInterval.normalInterval,
     ).listen(_onGyro, onError: (_) {});
   }
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
@@ -148,11 +149,26 @@ class WorkoutTaskHandler extends TaskHandler {
   void _startGps() {
     _gpsSub?.cancel();
     try {
+      // Gunakan AndroidSettings agar Android tahu GPS diminta dari Foreground Service.
+      // Ini mencegah pembatasan update rate GPS saat layar mati.
+      final settings = Platform.isAndroid
+          ? AndroidSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 0,
+              intervalDuration: const Duration(seconds: 1),
+              foregroundNotificationConfig: const ForegroundNotificationConfig(
+                notificationText: 'GPS tracking aktif',
+                notificationTitle: 'IbnuTify Workout',
+                enableWakeLock: true,
+              ),
+            )
+          : const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 0,
+            );
+
       _gpsSub = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 0,
-        ),
+        locationSettings: settings,
       ).listen(_onPosition, onError: (_) {});
     } catch (_) {}
   }
