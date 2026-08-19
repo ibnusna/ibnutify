@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'sensor_fusion_engine.dart' show HrZone, classifyHrZone;
+
 
 // ─── BLE GATT Constants ───────────────────────────────────────────────────────
 
@@ -105,9 +105,16 @@ class WatchService {
     if (!_stateController.isClosed) _stateController.add(newState);
   }
 
-  /// Scan for BLE devices advertising Heart Rate Service.
-  /// [timeout] — stop scan after this duration.
-  Future<void> startScan({Duration timeout = const Duration(seconds: 10)}) async {
+  /// Scan for ALL nearby BLE devices (broad scan — no service UUID filter).
+  ///
+  /// Alasan tidak menggunakan withServices filter:
+  /// Smartwatch budget (itel ISW-011, merek IoT Tiongkok) sering tidak
+  /// mengiklankan Heart Rate UUID (0x180D) di advertisement packet,
+  /// meskipun service tersebut tersedia setelah connect via GATT discovery.
+  /// Broad scan memastikan semua device terdeteksi.
+  ///
+  /// [timeout] — stop scan after this duration (default 20s untuk device lambat advertise).
+  Future<void> startScan({Duration timeout = const Duration(seconds: 20)}) async {
     if (_state.isScanning) return;
 
     // Check BLE adapter
@@ -123,8 +130,9 @@ class WatchService {
     _discovered.clear();
     _emit(_state.copyWith(connectionState: WatchConnectionState.scanning));
 
+    // Broad scan tanpa filter service UUID — menemukan semua perangkat BLE terdekat.
+    // Filter visual dilakukan di UI (watch_pairing_sheet).
     await FlutterBluePlus.startScan(
-      withServices: [Guid(_kHrServiceUuid)],
       timeout: timeout,
     );
 
@@ -218,12 +226,28 @@ class WatchService {
     }
 
     if (!hrFound) {
-      await device.disconnect();
+      // Jangan langsung disconnect — beberapa smartwatch (seperti itel ISW-011)
+      // menggunakan custom UUID atau tidak expose HR via standard GATT 0x180D.
+      // Tetap emit "connected" dengan hasHeartRate=false agar user tahu device
+      // berhasil ditemukan dan tersambung, meskipun HR tidak tersedia via GATT standar.
       _emit(_state.copyWith(
-        connectionState: WatchConnectionState.error,
-        errorMessage: 'Perangkat tidak mendukung Heart Rate Service.',
+        connectionState: WatchConnectionState.connected,
+        deviceName: device.platformName.isNotEmpty ? device.platformName : 'Smartwatch',
+        deviceMac: device.remoteId.str,
+        batteryLevel: battery,
+        hasHeartRate: false,
+        errorMessage:
+            'Perangkat terhubung, tetapi Heart Rate Service (GATT 0x180D) tidak ditemukan. '
+            'Detak jantung tidak akan ditampilkan.',
       ));
-      return false;
+      // Simpan device untuk auto-reconnect meski tanpa HR
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kPrefLastWatchMac, device.remoteId.str);
+      await prefs.setString(
+        _kPrefLastWatchName,
+        device.platformName.isNotEmpty ? device.platformName : 'Smartwatch',
+      );
+      return true;
     }
 
     // Persist device for auto-reconnect
@@ -269,9 +293,10 @@ class WatchService {
         deviceMac: lastMac,
       ));
 
+      // Broad scan untuk autoConnect — konsisten dengan startScan().
+      // Timeout 8 detik agar device punya waktu mulai advertising.
       await FlutterBluePlus.startScan(
-        withServices: [Guid(_kHrServiceUuid)],
-        timeout: const Duration(seconds: 6),
+        timeout: const Duration(seconds: 8),
       );
 
       BluetoothDevice? found;

@@ -12,17 +12,34 @@ class LocationService {
 
   // ─── Permission ────────────────────────────────────────────────────────────
 
-  /// Meminta permission GPS. Returns true jika granted.
+  /// Meminta permission GPS termasuk background location (ACCESS_BACKGROUND_LOCATION).
+  /// Android mensyaratkan two-step dialog:
+  ///   Step 1 → request "while in use" (whileInUse)
+  ///   Step 2 → request "always" (background) — hanya bisa setelah step 1 granted.
+  /// Returns true jika minimal "while in use" diberikan (app tetap bisa tracking
+  /// saat di foreground). Background tracking memerlukan "always" permission.
   Future<bool> requestPermission() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return false;
 
     LocationPermission permission = await Geolocator.checkPermission();
+
+    // Step 1: Request whileInUse jika belum granted
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) return false;
     }
     if (permission == LocationPermission.deniedForever) return false;
+
+    // Step 2: Request background location ("always") jika masih whileInUse.
+    // Ini diperlukan agar GPS tetap aktif saat layar dikunci (Doze Mode).
+    // Pada Android 11+ user diarahkan ke Settings untuk pilih "Allow all the time".
+    if (permission == LocationPermission.whileInUse) {
+      permission = await Geolocator.requestPermission();
+      // Jika background ditolak, kita tetap return true agar workout bisa dimulai
+      // (tracking akan aktif selama app di foreground, GPS mungkin berhenti saat lock screen).
+    }
+
     return true;
   }
 
