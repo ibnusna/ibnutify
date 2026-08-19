@@ -21,6 +21,8 @@ The system is a standalone mobile application (Android-first). It consists of a 
 - **Audio Engine:** `just_audio`, `audio_service`, `just_audio_background`
 - **Machine Learning Engine:** Chaquopy (Embedded Python 3.10)
 - **Permissions & Storage:** `permission_handler`, `on_audio_query` (or native MediaStore queries)
+- **Sensor Fusion:** `sensors_plus` (Accelerometer & Gyroscope)
+- **Smartwatch BLE Integration:** `flutter_blue_plus` (BLE GATT Central for Heart Rate Service)
 - **Target Platform:** Android (ARM64 optimized)
 
 ## 6. Architecture Overview
@@ -48,6 +50,12 @@ lib/
 - **Services Module:** 
   - `AudioHandler`: Manages `just_audio` state and background OS hooks.
   - `MLService`: Bridges Dart to Kotlin/Python via `MethodChannel`.
+- **Workout Mode & Sensor Fusion Module:**
+  - `WorkoutTaskHandler`: Runs in a separate Dart isolate via `flutter_foreground_task` Android Foreground Service to prevent background freezing when device is locked.
+  - `SensorFusionEngine`: Orchestrates real-time inputs from GPS, Accelerometer, and Gyroscope. Combines magnitude calculations via `StepDetector` (with low-pass filtering and peak detection for cadence/SPM), `AltitudeKalmanFilter` (simple 1D Kalman filter to smooth altitude telemetry), and `ActivityClassifier` (rule-based heuristic to auto-detect Walking, Running, Cycling, or Hiking).
+  - `CalorieEstimator`: Estimates energy expenditure using the Keytel Formula (using HR) or MET-based equations (fallback).
+- **Smartwatch BLE Module:**
+  - `WatchService`: Manages scanning for BLE peripherals, standard GATT handshake, service discovery for Heart Rate Service (`0x180D`), and subscribing to notification characteristic (`0x2A37`). Handles auto-reconnection to the last paired device via `SharedPreferences`.
 
 ## 9. Authentication System
 Information not found in source code. (IbnuTify is a local-first application and does not currently implement user registration or cloud authentication).
@@ -89,19 +97,37 @@ All features are 100% offline by design. The app scans the device's `MediaStore`
 
 ## 18. Database Documentation
 **Technology:** SQLite (`sqflite`)
+**Schema Version:** 7
 **Tables:**
 1. `songs`:
    - `id` (INTEGER PRIMARY KEY)
-   - `title`, `artist`, `album`, `uri` (TEXT)
+   - `uri` (TEXT UNIQUE NOT NULL)
+   - `title`, `artist`, `album` (TEXT)
    - `duration`, `play_count`, `added_at` (INTEGER)
    - `bpm`, `brightness`, `percussiveness` (REAL)
-   - `cluster_id`, `release_year` (INTEGER)
+   - `cluster_id`, `release_year`, `skip_count`, `completion_count` (INTEGER)
+   - `youtube_url` (TEXT)
 2. `playlists`:
-   - `id` (INTEGER PRIMARY KEY AUTOINCREMENT)
+   - `id` (TEXT PRIMARY KEY)
    - `name`, `description` (TEXT)
-   - `created_at` (INTEGER)
+   - `isCustom`, `created_at` (INTEGER)
 3. `playlist_songs`:
-   - `playlist_id`, `song_id` (INTEGER, Composite Primary Key)
+   - `playlist_id` (TEXT), `song_id` (INTEGER, Composite Primary Key)
+4. `listening_history`:
+   - `id` (INTEGER PRIMARY KEY AUTOINCREMENT)
+   - `song_id` (INTEGER)
+   - `timestamp`, `duration_listened` (INTEGER)
+5. `activities`:
+   - `id` (INTEGER PRIMARY KEY AUTOINCREMENT)
+   - `sport_mode`, `created_at` (TEXT)
+   - `duration` (INTEGER)
+   - `distance` (REAL)
+   - `route_points` (TEXT - JSON coordinates)
+   - `step_count`, `avg_heart_rate_bpm` (INTEGER)
+   - `elevation_gain_m`, `estimated_calories` (REAL)
+6. `deleted_songs` (blacklist):
+   - `id` (INTEGER PRIMARY KEY)
+   - `uri` (TEXT)
 
 ## 19. API Documentation
 Information not found in source code. No external REST/GraphQL APIs are consumed. All communication is done via internal Flutter `MethodChannel` (`com.ibnutify.ml/audio`) to communicate with native Android Kotlin and Python.
@@ -111,6 +137,10 @@ Information not found in source code. No external REST/GraphQL APIs are consumed
 2. **SearchScreen:** Text input for filtering the local library.
 3. **LibraryScreen:** Manages User Custom Playlists, Liked Songs, and displays all tracks.
 4. **PlayerScreen:** Full-screen playback UI, dynamic background color based on Album Art, seek bar, and playback controls.
+5. **WorkoutActiveScreen:** Full-screen workout tracker dashboard showing duration, distance, pace, real-time map, sensor fusion stats (steps, cadence, elevation gain, calories), and smartwatch heart rate zone telemetry. Includes pairing sheet triggers.
+6. **WorkoutSummaryScreen:** Summary display shown after stopping a workout, presenting an 8-stat bento grid of exercise performance and path mapping before committing to DB.
+7. **WorkoutHistoryScreen:** History overview displaying a card-based list of all past logged activities.
+8. **WorkoutDetailScreen:** Full detail screen mapping the route path and plotting statistics for a past workout activity.
 
 ## 21. UI/UX Documentation
 - **Design Language:** Modern, dark-mode focused, glassmorphism elements, Spotify-inspired layout.
@@ -122,6 +152,10 @@ Information not found in source code. No external REST/GraphQL APIs are consumed
 - `songsProvider`: `AsyncNotifier` managing the entire local song library and triggering background ML sync.
 - `playerProvider`: Manages current playing song, queue, playback state (playing/paused), and shuffle/repeat modes.
 - `navigationProvider`: Manages BottomNavigationBar index state.
+- `workoutProvider`: `Notifier` representing the active `WorkoutState` and coordinating start/pause/resume/stop hooks.
+- `watchStateProvider`: `StreamProvider` emitting smartwatch BLE connection events (`WatchState`).
+- `watchHrProvider`: `StreamProvider` emitting live parsed heart rate updates.
+- `activitiesProvider`: `FutureProvider` loading historical logged workouts from SQLite.
 
 ## 23. Storage Documentation
 - **Audio Files:** Reside on external/internal Android storage. App requires `READ_EXTERNAL_STORAGE` or `READ_MEDIA_AUDIO` permissions.
@@ -172,8 +206,8 @@ Strict modular separation between `presentation` (UI), `data` (SQLite, Repositor
 - `on_audio_query`: MediaStore scanning
 
 ## 34. Configuration Documentation
-- `AndroidManifest.xml` configures foreground services (`FOREGROUND_SERVICE_MEDIA_PLAYBACK`) and audio service receivers.
-- `build.gradle` defines the Chaquopy Python environment (version 3.10, optimized without heavy ML libs to prevent installation timeouts).
+- `AndroidManifest.xml` configures foreground services (`FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `FOREGROUND_SERVICE_LOCATION`, `FOREGROUND_SERVICE_HEALTH`), required permissions (including `POST_NOTIFICATIONS` and BLE permissions), and audio service receivers.
+- `build.gradle` defines target compileSdk (version 35 for foreground task requirements) and the Chaquopy Python environment (version 3.10, optimized without heavy ML libs to prevent installation timeouts).
 
 ## 35. Future Scalability Notes
 - Migration to full Isolate-based background scanning in Dart.
