@@ -7,20 +7,16 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
-import com.ryanheise.audioservice.AudioServicePlugin
-import io.flutter.embedding.android.FlutterFragmentActivity
+import com.ryanheise.audioservice.AudioServiceFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import kotlin.concurrent.thread
 
-class MainActivity: FlutterFragmentActivity() {
+class MainActivity: AudioServiceFragmentActivity() {
     private val CHANNEL = "com.ibnutify.ml/audio"
 
-    override fun provideFlutterEngine(context: Context): FlutterEngine? {
-        return AudioServicePlugin.getFlutterEngine(context)
-    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
