@@ -114,6 +114,7 @@ class WatchService {
   /// Broad scan memastikan semua device terdeteksi.
   ///
   /// [timeout] — stop scan after this duration (default 20s untuk device lambat advertise).
+  /// Scan for ALL nearby BLE devices + bonded system devices.
   Future<void> startScan({Duration timeout = const Duration(seconds: 20)}) async {
     if (_state.isScanning) return;
 
@@ -130,20 +131,50 @@ class WatchService {
     _discovered.clear();
     _emit(_state.copyWith(connectionState: WatchConnectionState.scanning));
 
-    // Broad scan tanpa filter service UUID — menemukan semua perangkat BLE terdekat.
-    // Filter visual dilakukan di UI (watch_pairing_sheet).
-    await FlutterBluePlus.startScan(
-      timeout: timeout,
-    );
+    // 1. Ambil bonded devices (perangkat terpasang di Android settings seperti itel ISW-011)
+    try {
+      final bonded = await FlutterBluePlus.bondedDevices;
+      for (final device in bonded) {
+        final existingIdx = _discovered.indexWhere((r) => r.device.remoteId == device.remoteId);
+        if (existingIdx == -1) {
+          _discovered.add(ScanResult(
+            device: device,
+            rssi: -50,
+            advertisementData: AdvertisementData(
+              advName: device.platformName,
+              txPowerLevel: null,
+              connectable: true,
+              manufacturerData: {},
+              serviceData: {},
+              serviceUuids: [],
+              appearance: null,
+            ),
+            timeStamp: DateTime.now(),
+          ));
+        }
+      }
+      if (_discovered.isNotEmpty && !_discoveredController.isClosed) {
+        _discoveredController.add(List.unmodifiable(_discovered));
+      }
+    } catch (_) {}
 
+    // 2. Stream over-the-air scan results
     _scanSub?.cancel();
     _scanSub = FlutterBluePlus.scanResults.listen((results) {
-      _discovered.clear();
-      _discovered.addAll(results);
+      for (final r in results) {
+        final idx = _discovered.indexWhere((existing) => existing.device.remoteId == r.device.remoteId);
+        if (idx >= 0) {
+          _discovered[idx] = r;
+        } else {
+          _discovered.add(r);
+        }
+      }
       if (!_discoveredController.isClosed) {
         _discoveredController.add(List.unmodifiable(_discovered));
       }
     });
+
+    await FlutterBluePlus.startScan(timeout: timeout);
 
     // Auto stop scanning after timeout
     Future.delayed(timeout, () {
@@ -151,8 +182,8 @@ class WatchService {
     });
   }
 
-  void stopScan() {
-    FlutterBluePlus.stopScan();
+  Future<void> stopScan() async {
+    await FlutterBluePlus.stopScan();
     _scanSub?.cancel();
     _scanSub = null;
     if (_state.isScanning) {
@@ -162,7 +193,11 @@ class WatchService {
 
   /// Connect to a specific BLE device and subscribe to HR notifications.
   Future<bool> connect(BluetoothDevice device) async {
-    stopScan();
+    // WAJIB: Hentikan scan secara sempurna dan tunggu sisa radio HCI settle (600ms)
+    // agar Android tidak mengalami GATT Error 133 akibat scan+connect bentrok.
+    await stopScan();
+    await Future.delayed(const Duration(milliseconds: 600));
+
     _emit(_state.copyWith(
       connectionState: WatchConnectionState.connecting,
       deviceName: device.platformName.isNotEmpty ? device.platformName : 'Smartwatch',
