@@ -88,7 +88,9 @@ class _WorkoutSummaryScreenState extends ConsumerState<WorkoutSummaryScreen>
         ),
         transitionDuration: const Duration(milliseconds: 350),
       ),
-      (route) => false,
+      // Pertahankan root route (MainShell) agar back dari WorkoutHistoryScreen
+      // kembali ke dashboard, bukan blank.
+      (route) => route.isFirst,
     );
   }
 
@@ -103,7 +105,9 @@ class _WorkoutSummaryScreenState extends ConsumerState<WorkoutSummaryScreen>
         ),
         transitionDuration: const Duration(milliseconds: 300),
       ),
-      (route) => false,
+      // Pertahankan root route (MainShell) agar back dari WorkoutHistoryScreen
+      // kembali ke dashboard, bukan blank.
+      (route) => route.isFirst,
     );
   }
 

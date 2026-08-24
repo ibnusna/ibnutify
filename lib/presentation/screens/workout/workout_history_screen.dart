@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/activity_model.dart';
 import '../../providers/app_providers.dart';
@@ -97,9 +98,9 @@ class _WorkoutHistoryScreenState extends ConsumerState<WorkoutHistoryScreen>
                   color: AppColors.onSurface),
               onPressed: () => Navigator.pop(context),
             ),
-            title: const Text(
+            title: Text(
               'Riwayat Olahraga',
-              style: TextStyle(
+              style: GoogleFonts.inter(
                 color: AppColors.onSurface,
                 fontSize: 20,
                 fontWeight: FontWeight.w900,

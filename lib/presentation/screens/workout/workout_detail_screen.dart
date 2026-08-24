@@ -104,7 +104,11 @@ class WorkoutDetailScreen extends StatelessWidget {
                 // ── Scrollable content ────────────────────────────────────
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+                    padding: EdgeInsets.fromLTRB(
+                      16, 8, 16,
+                      // Pastikan konten tidak terpotong system navigation bar
+                      MediaQuery.of(context).padding.bottom + 24,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -193,6 +197,44 @@ class WorkoutDetailScreen extends StatelessWidget {
                               iconColor: AppColors.primary,
                               value: '${routePoints.length}',
                               label: 'Titik GPS',
+                            ),
+                            // ── Sensor fusion stats (DB v7) ───────────────
+                            _StatBento(
+                              icon: Icons.directions_walk_rounded,
+                              iconColor: AppColors.onSurfaceVariant,
+                              value: activity.sportMode == 'Sepeda'
+                                  ? '--'
+                                  : '${activity.stepCount}',
+                              label: 'Langkah',
+                            ),
+                            _StatBento(
+                              icon: Icons.trending_up_rounded,
+                              iconColor: const Color(0xFF66BB6A),
+                              value: '+${activity.elevationGainM.toStringAsFixed(0)} m',
+                              label: 'Elevasi Naik',
+                              valueColor: const Color(0xFF66BB6A),
+                            ),
+                            _StatBento(
+                              icon: Icons.local_fire_department_rounded,
+                              iconColor: Colors.deepOrangeAccent,
+                              value: activity.estimatedCalories > 0
+                                  ? '${activity.estimatedCalories.toStringAsFixed(0)} kal'
+                                  : '-- kal',
+                              label: 'Kalori',
+                              valueColor: activity.estimatedCalories > 0
+                                  ? Colors.deepOrangeAccent
+                                  : AppColors.onSurface,
+                            ),
+                            _StatBento(
+                              icon: Icons.favorite_rounded,
+                              iconColor: Colors.redAccent,
+                              value: activity.avgHeartRateBpm > 0
+                                  ? '${activity.avgHeartRateBpm} bpm'
+                                  : '-- bpm',
+                              label: 'Detak Jantung',
+                              valueColor: activity.avgHeartRateBpm > 0
+                                  ? Colors.redAccent
+                                  : AppColors.onSurfaceVariant,
                             ),
                           ],
                         ),
