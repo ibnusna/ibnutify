@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart'; // debugPrint
 import 'package:sensors_plus/sensors_plus.dart';
 
 // ─── Kalman Filter (Altitude Smoothing) ───────────────────────────────────────
@@ -206,26 +207,58 @@ class ActivityClassifier {
 
   /// Classify based on current sensor snapshot.
   /// Call this once per second (from GPS update tick).
+  ///
+  /// [FIX-BUG-TRK-001-H2] userSelectedMode now acts as PRIMARY hard-lock.
+  /// When user explicitly selects a mode (Berlari, Berjalan, etc.), the classifier
+  /// locks to that mode and only overrides to 'still' if BOTH GPS and cadence
+  /// are near-zero (genuine standstill). This prevents the erroneous fallback
+  /// to 'Cycling' that occurred when the pedometer was killed by the OS.
   DetectedActivity classify({
     required double gpsSpeedMs,
     required double cadenceSpm,
     required double altitudeDeltaMs, // meters per second altitude change
-    required String userSelectedMode, // hint from manual selection
+    required String userSelectedMode, // user's explicit mode selection
   }) {
     DetectedActivity candidate;
 
-    if (gpsSpeedMs < 0.5) {
-      candidate = DetectedActivity.still;
-    } else if (userSelectedMode == 'Sepeda' || (gpsSpeedMs >= 4.0 && _accelVariance < 0.8)) {
-      // Cycling: high speed but smooth (low accel variance)
-      candidate = DetectedActivity.cycling;
-    } else if (altitudeDeltaMs > 0.08 && gpsSpeedMs < 2.5 && cadenceSpm < 100) {
-      // Hiking: significant vertical gain, moderate speed, low cadence
-      candidate = DetectedActivity.hiking;
-    } else if (gpsSpeedMs < 2.0 || cadenceSpm < 100) {
-      candidate = DetectedActivity.walking;
+    // Definisi "benar-benar diam": GPS hampir nol DAN cadence nol
+    // Threshold longgar: GPS bisa noise 0.3 m/s, cadence bisa 0 saat sensor recovering
+    final bool isTrulyStill = gpsSpeedMs < 0.3 && cadenceSpm < 10;
+
+    // ── Primary Hard-Lock: ikuti pilihan eksplisit user ─────────────────────
+    // Ini mencegah ActivityClassifier menimpa mode user saat sensor recovering.
+    if (userSelectedMode == 'Sepeda') {
+      candidate = isTrulyStill
+          ? DetectedActivity.still
+          : DetectedActivity.cycling;
+    } else if (userSelectedMode == 'Berlari') {
+      // Hanya override ke still jika GPS & cadence benar-benar nol
+      candidate = isTrulyStill
+          ? DetectedActivity.still
+          : DetectedActivity.running;
+    } else if (userSelectedMode == 'Berjalan') {
+      candidate = isTrulyStill
+          ? DetectedActivity.still
+          : DetectedActivity.walking;
+    } else if (userSelectedMode == 'Mendaki') {
+      candidate = isTrulyStill
+          ? DetectedActivity.still
+          : DetectedActivity.hiking;
     } else {
-      candidate = DetectedActivity.running;
+      // ── Auto-detect: tidak ada pilihan user (mode kosong/tidak dikenal) ─
+      if (gpsSpeedMs < 0.5) {
+        candidate = DetectedActivity.still;
+      } else if (gpsSpeedMs >= 4.0 && _accelVariance < 0.8) {
+        // Cycling: kecepatan tinggi + akselerasi mulus
+        candidate = DetectedActivity.cycling;
+      } else if (altitudeDeltaMs > 0.08 && gpsSpeedMs < 2.5 && cadenceSpm < 100) {
+        // Hiking: naik signifikan, kecepatan sedang, cadence rendah
+        candidate = DetectedActivity.hiking;
+      } else if (gpsSpeedMs < 2.0 || cadenceSpm < 100) {
+        candidate = DetectedActivity.walking;
+      } else {
+        candidate = DetectedActivity.running;
+      }
     }
 
     // Hysteresis: only switch after N consistent readings
@@ -447,6 +480,9 @@ class SensorFusionEngine {
 
   bool _isRunning = false;
 
+  // [FIX-BUG-TRK-001-H4] Track sensor availability untuk error handling aktif
+  bool _isAccelAvailable = true;
+
   // Public snapshot (updated each second by GPS tick)
   SensorFusionSnapshot _snapshot = const SensorFusionSnapshot();
   SensorFusionSnapshot get snapshot => _snapshot;
@@ -456,16 +492,24 @@ class SensorFusionEngine {
     _isRunning = true;
     _stepDetector.configureSportMode(sportMode);
 
-    // Subscribe ke accelerometer dengan interval normal (~200ms) untuk background.
-    // uiInterval (~16ms/60Hz) tidak reliable di background isolate (task handler).
+    // [FIX-BUG-TRK-001-H4] Ganti normalInterval (5Hz) ke uiInterval (~60Hz).
+    // Step detection peak-based membutuhkan minimal 20-50Hz untuk andal mendeteksi
+    // lonjakan akselerasi selama 1 langkah (~50-150ms). 5Hz melewatkan banyak peak.
+    // Error handler aktif: catat error dan tandai sensor tidak tersedia.
+    _isAccelAvailable = true;
     _accelSub = accelerometerEventStream(
-      samplingPeriod: SensorInterval.normalInterval, // 5Hz — cukup untuk step detection
-    ).listen(_onAccel, onError: (_) {});
+      samplingPeriod: SensorInterval.uiInterval, // ~60Hz — presisi untuk step detection
+    ).listen(_onAccel, onError: (err) {
+      debugPrint('[SensorFusionEngine] Accelerometer error di background isolate: $err');
+      _isAccelAvailable = false;
+    });
 
-    // Gyroscope — interval normal untuk efisiensi baterai di background
+    // Gyroscope — normalInterval cukup (hanya untuk future orientation smoothing)
     _gyroSub = gyroscopeEventStream(
       samplingPeriod: SensorInterval.normalInterval,
-    ).listen(_onGyro, onError: (_) {});
+    ).listen(_onGyro, onError: (err) {
+      debugPrint('[SensorFusionEngine] Gyroscope error: $err');
+    });
   }
 
   void stop() {
@@ -474,6 +518,7 @@ class SensorFusionEngine {
     _gyroSub?.cancel();
     _accelSub = null;
     _gyroSub = null;
+    _isAccelAvailable = true; // reset untuk sesi berikutnya
     _stepDetector.reset();
     _activityClassifier.reset();
     _elevationTracker.reset();

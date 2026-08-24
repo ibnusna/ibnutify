@@ -49,8 +49,10 @@
             </intent-filter>
         </receiver>
         <!-- flutter_foreground_task: workout background service -->
+        <!-- stopWithTask="false": pastikan service tidak mati saat app task dihentikan OS/user -->
         <service android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="location|health" />
     </application>
 

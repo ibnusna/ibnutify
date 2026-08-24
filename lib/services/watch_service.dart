@@ -205,29 +205,28 @@ class WatchService {
     ));
 
     try {
-      // Direct BLE connection (autoConnect: false)
+      // Primary attempt: direct connection
       await device.connect(
-        timeout: const Duration(seconds: 12),
+        timeout: const Duration(seconds: 8),
         autoConnect: false,
       );
     } catch (e) {
       final errStr = e.toString();
-      // Error 133 = GATT_ERROR — coba retry sekali lagi secara direct setelah delay 1.5s
       if (errStr.contains('133') ||
           errStr.contains('ANDROID_SPECIFIC_ERROR') ||
           errStr.contains('GATT_ERROR')) {
         try {
-          await Future.delayed(const Duration(milliseconds: 1500));
+          // Retry dengan autoConnect: true (menggunakan background ACL link yang sudah ada dari Classic BT)
+          await Future.delayed(const Duration(milliseconds: 1000));
           await device.connect(
-            timeout: const Duration(seconds: 12),
-            autoConnect: false,
+            timeout: const Duration(seconds: 10),
+            autoConnect: true,
           );
         } catch (e2) {
           _emit(_state.copyWith(
             connectionState: WatchConnectionState.error,
             errorMessage:
-                'Koneksi gagal (GATT error 133). Pastikan smartwatch tidak terhubung ke aplikasi lain, '
-                'atau restart Bluetooth HP Anda.',
+                'Gagal terhubung via BLE (GATT 133). Lepas sambungan Bluetooth audio itel ISW-011 sementara di Pengaturan HP, lalu coba hubungkan kembali.',
           ));
           return false;
         }

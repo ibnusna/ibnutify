@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart'; // defaultTargetPlatform, debugPrint
 import 'package:flutter/widgets.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
@@ -149,9 +149,10 @@ class WorkoutTaskHandler extends TaskHandler {
   void _startGps() {
     _gpsSub?.cancel();
     try {
-      // Gunakan AndroidSettings agar Android tahu GPS diminta dari Foreground Service.
-      // Ini mencegah pembatasan update rate GPS saat layar mati.
-      final settings = Platform.isAndroid
+      // [FIX-BUG-TRK-001-H1] Gunakan AndroidSettings agar Android tahu GPS
+      // diminta dari Foreground Service. intervalDuration 1s memaksa update reguler,
+      // enableWakeLock mencegah CPU sleep saat layar mati (kritis untuk Samsung OneUI).
+      final settings = defaultTargetPlatform == TargetPlatform.android
           ? AndroidSettings(
               accuracy: LocationAccuracy.high,
               distanceFilter: 0,
@@ -169,7 +170,9 @@ class WorkoutTaskHandler extends TaskHandler {
 
       _gpsSub = Geolocator.getPositionStream(
         locationSettings: settings,
-      ).listen(_onPosition, onError: (_) {});
+      ).listen(_onPosition, onError: (err) {
+        debugPrint('[WorkoutTaskHandler] GPS error: $err');
+      });
     } catch (_) {}
   }
 
@@ -196,8 +199,11 @@ class WorkoutTaskHandler extends TaskHandler {
       return;
     }
 
-    // Skip posisi akurasi sangat buruk (> 50m)
-    if (accuracy > 50.0) {
+    // [FIX-BUG-TRK-001-H5] Longgarkan threshold dari 50m ke 100m.
+    // Threshold 50m terlalu ketat: GPS awal sering memiliki akurasi 50-80m (cold start,
+    // area padat). Dengan 100m, update GPS tetap masuk meski sinyal belum sempurna.
+    // Anti-jitter 1.5m di bawah tetap menjaga kualitas data.
+    if (accuracy > 100.0) {
       _sendStateToMain();
       return;
     }
