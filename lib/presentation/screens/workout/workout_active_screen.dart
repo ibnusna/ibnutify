@@ -54,8 +54,19 @@ class _WorkoutActiveScreenState extends ConsumerState<WorkoutActiveScreen>
   }
 
   Future<void> _startWorkout() async {
-    // [Bug 1 Fix] Jika ada initialSong (dari titik 3) atau ada lagu yang sedang diputar,
-    // gunakan antrean saat ini — tidak perlu membangun BPM queue baru
+    // Jika ada initialSong (dari titik 3 MoreOptionsSheet), putar lagu tersebut jika belum menjadi lagu aktif
+    if (widget.initialSong != null) {
+      final playerNotifier = ref.read(playerProvider.notifier);
+      final currentSong = ref.read(playerProvider).currentSong;
+      if (currentSong?.id != widget.initialSong!.id) {
+        final allSongs = ref.read(songsProvider).value ?? [];
+        final queue = allSongs.contains(widget.initialSong) ? allSongs : [widget.initialSong!];
+        await playerNotifier.playSong(widget.initialSong!, queue);
+      } else if (!ref.read(playerProvider).isPlaying) {
+        playerNotifier.togglePlay();
+      }
+    }
+
     final currentSong = ref.read(playerProvider).currentSong;
     final useCurrentQueue = widget.initialSong != null || currentSong != null;
 

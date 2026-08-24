@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -1503,8 +1504,11 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
   // Bug 4 fix: listener untuk tracking berapa lagu yang diputar
   StreamSubscription? _songTrackingSub;
 
+  // Local 1-second fallback timer di main isolate untuk menjamin UI timer selalu berjalan
+  Timer? _localTimer;
+
   // Callback yang terdaftar untuk menerima data dari task isolate
-  late final DataCallback _taskDataCallback;
+  DataCallback? _taskDataCallback;
 
   // Route points yang di-track di main isolate (sync dari task isolate)
   final List<LatLngPoint> _routePoints = [];
@@ -1551,9 +1555,11 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
     final currentPlayerState = ref.read(playerProvider);
     final initialSongsPlayed = (useCurrentQueue && currentPlayerState.currentSong != null) ? 1 : 0;
 
-    // ── 1. Set state DULU agar UI update ke isRunning = true ──────────────
+    // ── 1. Reset state & nyalakan Local 1-second UI Timer DULU ────────────
+    _localTimer?.cancel();
     _routePoints.clear();
     _lastKnownPoint = null;
+
     state = WorkoutState(
       sportMode: sportMode,
       isRunning: true,
@@ -1565,6 +1571,13 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       songsPlayed: initialSongsPlayed,
     );
 
+    // Dual-Timer: Main isolate timer memastikan UI timer (00:00:01...) langsung berjalan mulus
+    _localTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (state.isRunning && !state.isPaused) {
+        state = state.copyWith(elapsedSeconds: state.elapsedSeconds + 1);
+      }
+    });
+
     // ── 2. Mulai/pertahankan pemutaran musik ──────────────────────────────
     if (!useCurrentQueue) {
       final bpmQueue = _buildBpmQueue(sportMode);
@@ -1574,7 +1587,7 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       }
     }
 
-    // ── 3. [Bug 4 Fix] Track pergantian lagu via mediaItem stream ─────────
+    // ── 3. Track pergantian lagu via mediaItem stream ─────────────────────
     _songTrackingSub?.cancel();
     String? _lastTrackedMediaId;
     _songTrackingSub = ref.read(audioHandlerProvider).mediaItem.listen((item) {
@@ -1631,15 +1644,18 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
     // Re-initialize communication port to ensure port mapping is active
     FlutterForegroundTask.initCommunicationPort();
 
-    // ── 6. Register callback untuk terima update dari task isolate ────────
+    // ── 6. Cleanup & Register callback untuk terima update dari task isolate ────────
+    if (_taskDataCallback != null) {
+      FlutterForegroundTask.removeTaskDataCallback(_taskDataCallback!);
+    }
     _taskDataCallback = _onTaskData;
-    FlutterForegroundTask.addTaskDataCallback(_taskDataCallback);
+    FlutterForegroundTask.addTaskDataCallback(_taskDataCallback!);
 
     // ── 7. Start Android Foreground Service ───────────────────────────────
     // Pastikan service terdahulu di-stop agar isolate baru ter-spawn dengan bersih
     if (await FlutterForegroundTask.isRunningService) {
       await FlutterForegroundTask.stopService();
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future.delayed(const Duration(milliseconds: 500));
     }
 
     await FlutterForegroundTask.startService(
@@ -1752,9 +1768,11 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       return;
     }
 
-    // Update state UI setiap detik
+    // Update state UI setiap detik (gunakan nilai elapsedSecs terbesar dari task isolate atau local timer)
+    final syncedElapsedSecs = math.max(elapsedSecs, state.elapsedSeconds);
+
     state = state.copyWith(
-      elapsedSeconds: elapsedSecs,
+      elapsedSeconds: syncedElapsedSecs,
       distanceKm: distKm,
       currentSpeedMs: speedMs,
       gpsAccuracy: accuracy,
@@ -1793,6 +1811,10 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
   }
 
   Future<WorkoutState> stopWorkout() async {
+    // Stop local timer
+    _localTimer?.cancel();
+    _localTimer = null;
+
     // Ambil snapshot state saat ini sebelum di-reset
     final currentState = state;
 
@@ -1815,7 +1837,10 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
     unawaited(FlutterForegroundTask.stopService());
 
     // Cleanup
-    FlutterForegroundTask.removeTaskDataCallback(_taskDataCallback);
+    if (_taskDataCallback != null) {
+      FlutterForegroundTask.removeTaskDataCallback(_taskDataCallback!);
+      _taskDataCallback = null;
+    }
     await _songTrackingSub?.cancel();
     _songTrackingSub = null;
     await _hrSub?.cancel();
