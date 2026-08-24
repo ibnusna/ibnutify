@@ -892,9 +892,21 @@ final topSongsProvider = FutureProvider<List<SongModel>>((ref) async {
   return await ref.read(musicRepositoryProvider).getTopSongs(limit: 20);
 });
 
-final duplicateSongsProvider = FutureProvider<Map<String, List<SongModel>>>((ref) async {
-  ref.watch(songsProvider);
-  return await ref.read(musicRepositoryProvider).getDuplicateSongs();
+final duplicateSongsProvider = Provider<Map<String, List<SongModel>>>((ref) {
+  final songs = ref.watch(songsProvider).value ?? [];
+  final groups = <String, List<SongModel>>{};
+  for (final song in songs) {
+    final cleanTitle = song.title
+        .replaceAll(RegExp(r'\s*\(Copy.*?\)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s*\(\d+\)', caseSensitive: false), '')
+        .toLowerCase()
+        .trim();
+    final key = '$cleanTitle|${song.artist.toLowerCase().trim()}';
+    groups.putIfAbsent(key, () => []).add(song);
+  }
+  return Map.fromEntries(
+    groups.entries.where((e) => e.value.length > 1),
+  );
 });
 
 final randomHomeSongsProvider = Provider<List<SongModel>>((ref) {

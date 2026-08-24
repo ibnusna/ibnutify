@@ -70,8 +70,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     final songsAsync = ref.watch(songsProvider);
-    final duplicatesAsync = ref.watch(duplicateSongsProvider);
-    final duplicates = duplicatesAsync.value ?? {};
+    final duplicates = ref.watch(duplicateSongsProvider);
     final tabs = ['Playlists', 'Artists', 'Albums', 'Songs'];
     final hasDuplicates = duplicates.isNotEmpty;
 
@@ -760,6 +759,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   }
 
   void _confirmDeleteDuplicate(BuildContext context, SongModel song) {
+    final messenger = ScaffoldMessenger.of(context);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -780,6 +780,16 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             onPressed: () async {
               Navigator.of(ctx).pop();
               await ref.read(songsProvider.notifier).deleteSong(song.id);
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text(
+                    '"${song.title}" berhasil dihapus dari perangkat',
+                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w700),
+                  ),
+                  backgroundColor: AppColors.primary,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
             },
             child: const Text('Delete',
                 style: TextStyle(

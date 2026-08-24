@@ -175,8 +175,9 @@ class MoreOptionsSheet extends ConsumerWidget {
               label: 'Remove song',
               isDestructive: true,
               onTap: () {
-                Navigator.pop(context);
-                _confirmDelete(context, ref, song);
+                final messenger = ScaffoldMessenger.of(context);
+                final navContext = context;
+                _confirmDelete(navContext, ref, song, messenger);
               },
             ),
 
@@ -187,7 +188,7 @@ class MoreOptionsSheet extends ConsumerWidget {
     );
   }
   /// K3: Confirmation dialog sebelum menghapus lagu dari storage.
-  void _confirmDelete(BuildContext context, WidgetRef ref, SongModel song) {
+  void _confirmDelete(BuildContext context, WidgetRef ref, SongModel song, ScaffoldMessengerState messenger) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -209,16 +210,18 @@ class MoreOptionsSheet extends ConsumerWidget {
           TextButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
+              Navigator.of(context).pop(); // Pop sheet if open
               await ref.read(songsProvider.notifier).deleteSong(song.id);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('"${song.title}" deleted'),
-                    backgroundColor: AppColors.surfaceVariant,
-                    behavior: SnackBarBehavior.floating,
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text(
+                    '"${song.title}" berhasil dihapus dari perangkat',
+                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w700),
                   ),
-                );
-              }
+                  backgroundColor: AppColors.primary,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
             },
             child: const Text(
               'Delete',
