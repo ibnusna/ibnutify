@@ -593,8 +593,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   /// K2: Build tampilan duplikat — grouped by title+artist.
   Widget _buildDuplicatesView([ScrollController? scrollController]) {
-    final duplicatesAsync = ref.watch(duplicateSongsProvider);
-    final duplicates = duplicatesAsync.value ?? {};
+    final duplicates = ref.watch(duplicateSongsProvider);
 
     if (duplicates.isEmpty) {
       return Center(
