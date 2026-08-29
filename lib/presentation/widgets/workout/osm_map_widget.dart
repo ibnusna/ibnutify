@@ -140,8 +140,23 @@ class OsmMapWidget extends StatelessWidget {
             child: Stack(
               clipBehavior: Clip.hardEdge,
               children: [
-                // ── Background fallback ─────────────────────────────────
-                Container(color: const Color(0xFF1A1F1A)),
+                // ── Background fallback & Offline Aesthetic Grid Canvas ─────
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF0F2415),
+                        Color(0xFF131A14),
+                        Color(0xFF0D120E),
+                      ],
+                    ),
+                  ),
+                  child: CustomPaint(
+                    painter: _OfflineGridPatternPainter(),
+                  ),
+                ),
 
                 // ── OSM Tile Grid ───────────────────────────────────────
                 Positioned.fill(
@@ -168,7 +183,7 @@ class OsmMapWidget extends StatelessWidget {
                 Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.35),
+                      color: Colors.black.withOpacity(0.28),
                     ),
                   ),
                 ),
@@ -381,6 +396,29 @@ class _OsmRoutePainter extends CustomPainter {
     final nl = screenPoints.last;
     return ol.dx != nl.dx || ol.dy != nl.dy;
   }
+}
+
+// ── Offline Aesthetic Grid Pattern Painter ────────────────────────────────────
+
+class _OfflineGridPatternPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final gridPaint = Paint()
+      ..color = const Color(0xFF1DB954).withOpacity(0.06)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    const step = 28.0;
+    for (double x = 0; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (double y = 0; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // ── Live Position Dot (animated) ──────────────────────────────────────────────

@@ -268,8 +268,10 @@ class PlayerNotifier extends Notifier<PlayerState> {
       if (item != null) {
         final songId = item.extras?['songId'] as int?;
         if (songId != null) {
-          // Prevent metadata revert on pause: when paused, do not process mediaItem changes
-          if (!handler.player.playing && state.currentSong != null) {
+          // LOCK CRITICAL (BUG-CORE-003): Saat sedang di-pause dan currentSong sudah ada,
+          // SAMA SEKALI DILARANG me-reset currentSong ke lagu lain (misal index 0 / abjad A).
+          final isPausedState = !state.isPlaying || !handler.player.playing;
+          if (isPausedState && state.currentSong != null && state.currentSong!.id != songId) {
             return;
           }
           final curIdx = handler.player.currentIndex;
@@ -627,6 +629,106 @@ class SearchNotifier extends Notifier<String> {
 
 final searchQueryProvider =
     NotifierProvider<SearchNotifier, String>(SearchNotifier.new);
+
+// ─── Sleep Timer State & Notifier ───────────────────────────────────────────
+
+class SleepTimerState {
+  final Duration? duration;
+  final int remainingSeconds;
+  final bool isEndOfSong;
+
+  const SleepTimerState({
+    this.duration,
+    this.remainingSeconds = 0,
+    this.isEndOfSong = false,
+  });
+
+  String get formattedRemaining {
+    if (isEndOfSong) return 'Akhir lagu';
+    final m = remainingSeconds ~/ 60;
+    final s = remainingSeconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+}
+
+class SleepTimerNotifier extends Notifier<SleepTimerState> {
+  Timer? _timer;
+
+  @override
+  SleepTimerState build() {
+    ref.onDispose(() => _timer?.cancel());
+    return const SleepTimerState();
+  }
+
+  void setTimer(Duration? duration) {
+    _timer?.cancel();
+    _timer = null;
+
+    if (duration == null) {
+      state = const SleepTimerState();
+      return;
+    }
+
+    if (duration.inSeconds == -1) {
+      // Akhir lagu ini
+      state = const SleepTimerState(
+        duration: Duration(seconds: -1),
+        isEndOfSong: true,
+      );
+      return;
+    }
+
+    final totalSecs = duration.inSeconds;
+    state = SleepTimerState(
+      duration: duration,
+      remainingSeconds: totalSecs,
+    );
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      final next = state.remainingSeconds - 1;
+      if (next <= 0) {
+        t.cancel();
+        _triggerStopAndExit();
+      } else {
+        state = SleepTimerState(
+          duration: duration,
+          remainingSeconds: next,
+        );
+      }
+    });
+  }
+
+  void onSongCompleted() {
+    if (state.isEndOfSong) {
+      _triggerStopAndExit();
+    }
+  }
+
+  Future<void> _triggerStopAndExit() async {
+    final playerNotif = ref.read(playerProvider.notifier);
+    await playerNotif.clearQueue();
+    state = const SleepTimerState();
+    SystemNavigator.pop();
+  }
+}
+
+final sleepTimerProvider =
+    NotifierProvider<SleepTimerNotifier, SleepTimerState>(SleepTimerNotifier.new);
+
+// ─── Curfew Check Service (00:00 - 03:00) ──────────────────────────────────
+
+final curfewCheckProvider = Provider<void>((ref) {
+  Timer.periodic(const Duration(minutes: 1), (_) {
+    final now = DateTime.now();
+    if (now.hour >= 0 && now.hour < 3) {
+      final playerState = ref.read(playerProvider);
+      if (playerState.isPlaying) {
+        ref.read(playerProvider.notifier).clearQueue();
+        SystemNavigator.pop();
+      }
+    }
+  });
+});
 
 final selectedGenreProvider = StateProvider<String?>((ref) => null);
 

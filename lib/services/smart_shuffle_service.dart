@@ -22,16 +22,26 @@ class SmartShuffleService {
     if (queue.isEmpty) return [];
     if (queue.length == 1) return [0];
     
-    const int numCandidates = 5;
+    const int numCandidates = 8;
     final candidates = <List<int>>[];
     final random = Random();
 
-    // 1. Generate Multiple Candidates
+    // Hitung frekuensi artis dari 24h recent history untuk personalisasi
+    final artistFrequency = <String, int>{};
+    for (final songId in args.recentSongIds) {
+      final found = queue.where((s) => s.id == songId).firstOrNull;
+      if (found != null) {
+        final artist = found.artist.toLowerCase();
+        artistFrequency[artist] = (artistFrequency[artist] ?? 0) + 1;
+      }
+    }
+
+    // 1. Generate Candidates
     for (int c = 0; c < numCandidates; c++) {
       final candidate = List.generate(queue.length, (i) => i);
       candidate.shuffle(random);
       
-      // Ensure current song is always at index 0 if provided
+      // Pastikan currentSong selalu di indeks 0 jika ada
       if (args.currentSongId != null) {
         final curIdx = queue.indexWhere((s) => s.id == args.currentSongId);
         if (curIdx != -1) {
@@ -49,35 +59,37 @@ class SmartShuffleService {
       final candidate = candidates[c];
       double score = 0.0;
       
-      // Freshness Filter: penalize if recently played songs appear in the first 15 spots
+      // Freshness Filter: kurangi skor jika lagu yang baru diputar muncul di 15 posisi teratas
       final checkLength = min(15, candidate.length);
       for (int i = 1; i < checkLength; i++) {
         final song = queue[candidate[i]];
         if (args.recentSongIds.contains(song.id)) {
-          // Heavier penalty for being closer to the top
-          score -= (20.0 / i); 
+          score -= (25.0 / i);
         }
       }
 
-      // Engagement Filter: reward high completion rate, penalize high skip rate
+      // Engagement & Preference Filter
       for (int i = 1; i < candidate.length; i++) {
         final song = queue[candidate[i]];
-        
         final skips = song.skipCount;
         final completions = song.completionCount;
         final totalInteractions = skips + completions;
+        final artistKey = song.artist.toLowerCase();
         
+        // Reward untuk artis favorit berdasarkan listening history
+        if (artistFrequency.containsKey(artistKey)) {
+          final favBonus = (artistFrequency[artistKey]! * 3.0);
+          score += favBonus * ((candidate.length - i) / candidate.length);
+        }
+
         if (totalInteractions > 0) {
           final skipRate = skips / totalInteractions;
-          if (skipRate > 0.5) {
-             // Push frequently skipped songs to the bottom
-             // E.g., if it's near the top (small i), the penalty is larger
-             score -= (skipRate * 15.0) * ((candidate.length - i) / candidate.length);
+          if (skipRate > 0.4) {
+             score -= (skipRate * 18.0) * ((candidate.length - i) / candidate.length);
           }
           final completionRate = completions / totalInteractions;
-          if (completionRate > 0.8) {
-             // Keep frequently completed songs closer to the top
-             score += (completionRate * 8.0) * ((candidate.length - i) / candidate.length);
+          if (completionRate > 0.7) {
+             score += (completionRate * 12.0) * ((candidate.length - i) / candidate.length);
           }
         }
       }
@@ -97,12 +109,10 @@ class SmartShuffleService {
     final bestSequence = List<int>.from(candidates[bestIndex]);
 
     // 4. Dithering (Artist Spreading)
-    // Prevent songs from the same artist from playing back-to-back
     for (int i = 1; i < bestSequence.length; i++) {
       final currentArtist = queue[bestSequence[i]].artist;
       
       bool conflict = false;
-      // Check the previous 2 songs (distance < 3)
       for (int j = 1; j <= 2; j++) {
         if (i - j >= 0) {
            if (queue[bestSequence[i - j]].artist == currentArtist) {
@@ -113,12 +123,10 @@ class SmartShuffleService {
       }
 
       if (conflict) {
-        // Find a suitable swap candidate further down
         final searchLimit = min(i + 20, bestSequence.length);
         for (int k = i + 1; k < searchLimit; k++) {
           final candidateArtist = queue[bestSequence[k]].artist;
           if (candidateArtist != currentArtist) {
-            // Check if swapping causes a conflict for the new candidate at position i
             bool swapConflict = false;
             for (int j = 1; j <= 2; j++) {
               if (i - j >= 0 && queue[bestSequence[i - j]].artist == candidateArtist) {
@@ -127,11 +135,10 @@ class SmartShuffleService {
               }
             }
             if (!swapConflict) {
-              // Swap the elements to resolve conflict
               final temp = bestSequence[i];
               bestSequence[i] = bestSequence[k];
               bestSequence[k] = temp;
-              break; // Conflict resolved, move to next i
+              break;
             }
           }
         }

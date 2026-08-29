@@ -41,16 +41,28 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
 
   int _manualQueueCount = 0;
   int _lastIndex = -1;
+  MediaItem? _activeMediaItem;
 
   IbnuTifyAudioHandler() {
     // Synchronize playbackState (seekbar, controls, play/pause toggle) with audio_service
-    _player.playbackEventStream.listen((event) => _broadcastState(event));
-    _player.playerStateStream.listen((_) => _broadcastState());
+    _player.playerStateStream.listen((playerState) {
+      _broadcastState();
+      // Non-Stop Playback Engine: Ketika antrean musik selesai (ProcessingState.completed)
+      // dan loopMode off, ulangi antrean dari awal secara otomatis agar musik 24/7 tidak terhenti!
+      if (playerState.processingState == ProcessingState.completed) {
+        if (_player.loopMode == LoopMode.off && queue.value.isNotEmpty) {
+          _player.seek(Duration.zero, index: 0);
+          _player.play();
+        }
+      }
+    });
 
     // Update mediaItem duration as soon as just_audio resolves audio duration
     _player.durationStream.listen((dur) {
       if (dur != null && mediaItem.value != null && mediaItem.value!.duration != dur) {
-        mediaItem.add(mediaItem.value!.copyWith(duration: dur));
+        final updated = mediaItem.value!.copyWith(duration: dur);
+        _activeMediaItem = updated;
+        mediaItem.add(updated);
       }
     });
 
@@ -103,6 +115,7 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
     if (songId != null && _artworksCache.containsKey(songId)) {
       item = item.copyWith(artUri: Uri.file(_artworksCache[songId]!));
     }
+    _activeMediaItem = item;
     mediaItem.add(item);
     _handleSongChangeForTracking(item);
   }
@@ -115,6 +128,7 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
       if (songId != null && _artworksCache.containsKey(songId)) {
         item = item.copyWith(artUri: Uri.file(_artworksCache[songId]!));
       }
+      _activeMediaItem = item;
       mediaItem.add(item);
       _handleSongChangeForTracking(item);
     }
@@ -126,7 +140,13 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
   Future<void> play() => _player.play();
 
   @override
-  Future<void> pause() => _player.pause();
+  Future<void> pause() async {
+    await _player.pause();
+    // Re-emit activeMediaItem jika tidak null agar media notification tetap konsisten
+    if (_activeMediaItem != null) {
+      mediaItem.add(_activeMediaItem);
+    }
+  }
 
   @override
   Future<void> stop() async {

@@ -6,6 +6,7 @@ import '../../providers/app_providers.dart';
 import '../workout/sport_mode_picker.dart';
 import '../common/song_artwork_widget.dart';
 import 'edit_song_sheet.dart';
+import 'sleep_timer_sheet.dart';
 
 /// Bottom sheet with options for a song — mirrors MoreOptionsSheet.tsx
 class MoreOptionsSheet extends ConsumerWidget {
@@ -149,6 +150,18 @@ class MoreOptionsSheet extends ConsumerWidget {
               icon: Icons.share_rounded,
               label: 'Share',
               onTap: () => Navigator.pop(context),
+            ),
+            _OptionTile(
+              icon: Icons.timer_outlined,
+              label: 'Sleep Timer',
+              onTap: () {
+                Navigator.pop(context);
+                showModalBottomSheet(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => const SleepTimerSheet(),
+                );
+              },
             ),
             _OptionTile(
               icon: Icons.directions_run_rounded,

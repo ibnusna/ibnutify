@@ -130,7 +130,7 @@ class AlbumArtService {
   }
 
   /// Full pipeline: bytes + dominant color + gradient.
-  /// Returns [AlbumArtResult] with everything needed by the UI.
+  /// Returns [AlbumArtResult] with vibrant 2-3 color palette needed by Player Screen UI.
   Future<AlbumArtResult> process(
     int songId,
     MusicLocalDatasource datasource,
@@ -140,16 +140,48 @@ class AlbumArtService {
       return AlbumArtResult.fallback();
     }
 
-    final color = await extractDominantColor(bytes, songId);
+    Color primaryColor = kFallbackColor;
+    Color secondaryColor = kFallbackColor;
+    Color darkColor = const Color(0xFF181818);
+
+    try {
+      final palette = await PaletteGenerator.fromImageProvider(
+        MemoryImage(bytes),
+        maximumColorCount: 24,
+      );
+
+      // Spotify priority: vibrant → lightVibrant → dominant → darkMuted
+      final c1 = palette.vibrantColor?.color ??
+          palette.lightVibrantColor?.color ??
+          palette.dominantColor?.color ??
+          palette.darkVibrantColor?.color ??
+          kFallbackColor;
+
+      final c2 = palette.lightVibrantColor?.color ??
+          palette.mutedColor?.color ??
+          palette.darkMutedColor?.color ??
+          c1;
+
+      primaryColor = _clampToVibrant(c1);
+      secondaryColor = _clampToVibrant(c2);
+
+      final primaryHsl = HSLColor.fromColor(primaryColor);
+      darkColor = primaryHsl.withLightness((primaryHsl.lightness * 0.35).clamp(0.08, 0.22)).toColor();
+      _colorCache[songId] = primaryColor;
+    } catch (_) {
+      primaryColor = kFallbackColor;
+      secondaryColor = kFallbackColor;
+    }
+
     final path = await saveArtworkToTemp(bytes, songId);
 
     return AlbumArtResult(
       artBytes: bytes,
-      dominantColor: color,
+      dominantColor: primaryColor,
       gradientColors: [
-        color.withOpacity(0.90),
-        color.withOpacity(0.50),
-        const Color(0xFF121212),
+        primaryColor,
+        secondaryColor.withOpacity(0.75),
+        darkColor,
       ],
       artUri: path != null ? Uri.file(path) : null,
     );
@@ -157,13 +189,15 @@ class AlbumArtService {
 
   // ─── Private helpers ─────────────────────────────────────────────────────
 
-  /// Clamp raw color luminance for readable backgrounds, but preserve hue identity.
-  Color _clampToDark(Color color) {
+  /// Ensure color is vibrant and rich for player background without over-darkening.
+  Color _clampToVibrant(Color color) {
     final hsl = HSLColor.fromColor(color);
-    if (hsl.lightness <= 0.45) return color;
-    return hsl.withLightness(0.35).withSaturation(
-      (hsl.saturation * 0.9).clamp(0.0, 1.0),
-    ).toColor();
+    double targetLightness = hsl.lightness;
+    if (targetLightness < 0.28) targetLightness = 0.34;
+    if (targetLightness > 0.55) targetLightness = 0.48;
+
+    double targetSaturation = (hsl.saturation * 1.1).clamp(0.35, 0.95);
+    return hsl.withLightness(targetLightness).withSaturation(targetSaturation).toColor();
   }
 
   /// Simple LRU eviction: remove oldest entry when over capacity.
