@@ -87,7 +87,7 @@ class AlbumArtService {
           palette.dominantColor?.color ??
           kFallbackColor;
 
-      final color = _clampToDark(raw);
+      final color = _clampToVibrant(raw);
       _colorCache[songId] = color;
       return color;
     } catch (_) {
