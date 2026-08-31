@@ -70,6 +70,7 @@ class AlbumArtService {
   }
 
   /// Returns the dominant dark color extracted from [bytes].
+  /// Auto-darkens if luminance > 0.35 to keep notification background readable.
   Future<Color> extractDominantColor(Uint8List bytes, int songId) async {
     if (_colorCache.containsKey(songId)) return _colorCache[songId]!;
 
@@ -86,7 +87,7 @@ class AlbumArtService {
           palette.dominantColor?.color ??
           kFallbackColor;
 
-      final color = _clampToSpotifyLyricsTheme(raw);
+      final color = _clampToDark(raw);
       _colorCache[songId] = color;
       return color;
     } catch (_) {
@@ -129,8 +130,7 @@ class AlbumArtService {
   }
 
   /// Full pipeline: bytes + dominant color + gradient.
-  /// Memakai formula warna yang persis sama dengan Lirik Screen agar warna Player & Lirik 100% harmonis,
-  /// sangat mewah, dan tidak pernah menabrak/norak.
+  /// Returns [AlbumArtResult] with everything needed by the UI.
   Future<AlbumArtResult> process(
     int songId,
     MusicLocalDatasource datasource,
@@ -147,8 +147,8 @@ class AlbumArtService {
       artBytes: bytes,
       dominantColor: color,
       gradientColors: [
-        color,
-        color.withOpacity(0.60),
+        color.withOpacity(0.90),
+        color.withOpacity(0.50),
         const Color(0xFF121212),
       ],
       artUri: path != null ? Uri.file(path) : null,
@@ -157,16 +157,12 @@ class AlbumArtService {
 
   // ─── Private helpers ─────────────────────────────────────────────────────
 
-  /// Formula warna khas Spotify Lirik Screen:
-  /// Menjaga hue asli cover art, namun membatasi saturation & lightness
-  /// agar warna background terasa mewah, lembut, kontras sempurna dengan teks, dan TIDAK MENABRAK.
-  Color _clampToSpotifyLyricsTheme(Color color) {
+  /// Clamp raw color luminance for readable backgrounds, but preserve hue identity.
+  Color _clampToDark(Color color) {
     final hsl = HSLColor.fromColor(color);
-    return HSLColor.fromAHSL(
-      1.0,
-      hsl.hue,                                          // hue asli cover art
-      (hsl.saturation * 0.75).clamp(0.25, 0.85),        // slight desaturate
-      (hsl.lightness * 0.40).clamp(0.10, 0.30),         // darkened elegant
+    if (hsl.lightness <= 0.45) return color;
+    return hsl.withLightness(0.35).withSaturation(
+      (hsl.saturation * 0.9).clamp(0.0, 1.0),
     ).toColor();
   }
 
