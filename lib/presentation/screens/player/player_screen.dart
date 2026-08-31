@@ -105,7 +105,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          // ── Animated dynamic background gradient (Vibrant 2-3 Spotify Color blend) ──
+          // ── Animated dynamic background gradient (Spotify Lyrics Theme) ──
           AnimatedBuilder(
             animation: _gradientController,
             builder: (context, _) {
@@ -119,41 +119,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                   return Color.lerp(prevColor, _targetGradient[i], t)!;
                 },
               );
+              final topColor = interpolated.first;
+              final bottomColor = Color.lerp(topColor, Colors.black, 0.45)!;
+
               return Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    stops: const [0.0, 0.50, 1.0],
-                    colors: interpolated.length >= 3
-                        ? interpolated
-                        : [
-                            interpolated.first,
-                            interpolated.last.withOpacity(0.6),
-                            AppColors.background,
-                          ],
+                    stops: const [0.0, 1.0],
+                    colors: [topColor, bottomColor],
                   ),
                 ),
               );
             },
-          ),
-
-          // ── Soft bottom vignette for text contrast ───────────────────────
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  stops: const [0.0, 0.5, 1.0],
-                  colors: [
-                    Colors.black.withOpacity(0.0),
-                    Colors.black.withOpacity(0.08),
-                    Colors.black.withOpacity(0.22), // Soft vignette agar warna background cerah tetap menonjol
-                  ],
-                ),
-              ),
-            ),
           ),
 
           // ── Main content ──────────────────────────────────────────────────

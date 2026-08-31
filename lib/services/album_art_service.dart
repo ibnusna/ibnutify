@@ -70,7 +70,6 @@ class AlbumArtService {
   }
 
   /// Returns the dominant dark color extracted from [bytes].
-  /// Auto-darkens if luminance > 0.35 to keep notification background readable.
   Future<Color> extractDominantColor(Uint8List bytes, int songId) async {
     if (_colorCache.containsKey(songId)) return _colorCache[songId]!;
 
@@ -87,7 +86,7 @@ class AlbumArtService {
           palette.dominantColor?.color ??
           kFallbackColor;
 
-      final color = _clampToVibrant(raw);
+      final color = _clampToSpotifyLyricsTheme(raw);
       _colorCache[songId] = color;
       return color;
     } catch (_) {
@@ -130,7 +129,8 @@ class AlbumArtService {
   }
 
   /// Full pipeline: bytes + dominant color + gradient.
-  /// Returns [AlbumArtResult] with vibrant 2-3 color palette needed by Player Screen UI.
+  /// Memakai formula warna yang persis sama dengan Lirik Screen agar warna Player & Lirik 100% harmonis,
+  /// sangat mewah, dan tidak pernah menabrak/norak.
   Future<AlbumArtResult> process(
     int songId,
     MusicLocalDatasource datasource,
@@ -140,48 +140,16 @@ class AlbumArtService {
       return AlbumArtResult.fallback();
     }
 
-    Color primaryColor = kFallbackColor;
-    Color secondaryColor = kFallbackColor;
-    Color darkColor = const Color(0xFF181818);
-
-    try {
-      final palette = await PaletteGenerator.fromImageProvider(
-        MemoryImage(bytes),
-        maximumColorCount: 24,
-      );
-
-      // Spotify priority: vibrant → lightVibrant → dominant → darkMuted
-      final c1 = palette.vibrantColor?.color ??
-          palette.lightVibrantColor?.color ??
-          palette.dominantColor?.color ??
-          palette.darkVibrantColor?.color ??
-          kFallbackColor;
-
-      final c2 = palette.lightVibrantColor?.color ??
-          palette.mutedColor?.color ??
-          palette.darkMutedColor?.color ??
-          c1;
-
-      primaryColor = _clampToVibrant(c1);
-      secondaryColor = _clampToVibrant(c2);
-
-      final primaryHsl = HSLColor.fromColor(primaryColor);
-      darkColor = primaryHsl.withLightness((primaryHsl.lightness * 0.35).clamp(0.08, 0.22)).toColor();
-      _colorCache[songId] = primaryColor;
-    } catch (_) {
-      primaryColor = kFallbackColor;
-      secondaryColor = kFallbackColor;
-    }
-
+    final color = await extractDominantColor(bytes, songId);
     final path = await saveArtworkToTemp(bytes, songId);
 
     return AlbumArtResult(
       artBytes: bytes,
-      dominantColor: primaryColor,
+      dominantColor: color,
       gradientColors: [
-        primaryColor,
-        secondaryColor.withOpacity(0.75),
-        darkColor,
+        color,
+        color.withOpacity(0.60),
+        const Color(0xFF121212),
       ],
       artUri: path != null ? Uri.file(path) : null,
     );
@@ -189,15 +157,17 @@ class AlbumArtService {
 
   // ─── Private helpers ─────────────────────────────────────────────────────
 
-  /// Ensure color is vibrant and rich for player background without over-darkening.
-  Color _clampToVibrant(Color color) {
+  /// Formula warna khas Spotify Lirik Screen:
+  /// Menjaga hue asli cover art, namun membatasi saturation & lightness
+  /// agar warna background terasa mewah, lembut, kontras sempurna dengan teks, dan TIDAK MENABRAK.
+  Color _clampToSpotifyLyricsTheme(Color color) {
     final hsl = HSLColor.fromColor(color);
-    double targetLightness = hsl.lightness;
-    if (targetLightness < 0.28) targetLightness = 0.34;
-    if (targetLightness > 0.55) targetLightness = 0.48;
-
-    double targetSaturation = (hsl.saturation * 1.1).clamp(0.35, 0.95);
-    return hsl.withLightness(targetLightness).withSaturation(targetSaturation).toColor();
+    return HSLColor.fromAHSL(
+      1.0,
+      hsl.hue,                                          // hue asli cover art
+      (hsl.saturation * 0.75).clamp(0.25, 0.85),        // slight desaturate
+      (hsl.lightness * 0.40).clamp(0.10, 0.30),         // darkened elegant
+    ).toColor();
   }
 
   /// Simple LRU eviction: remove oldest entry when over capacity.
