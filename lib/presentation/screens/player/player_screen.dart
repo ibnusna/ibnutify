@@ -105,7 +105,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          // ── Animated dynamic background gradient ──────────────────────────
+          // ── Animated dynamic background gradient (Adaptive Spotify Mesh) ──
           AnimatedBuilder(
             animation: _gradientController,
             builder: (context, _) {
@@ -124,12 +124,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    stops: const [0.0, 0.45, 1.0],
+                    stops: const [0.0, 0.55, 1.0],
                     colors: interpolated.length >= 3
                         ? interpolated
                         : [
                             interpolated.first,
-                            interpolated.last.withOpacity(0.4),
+                            Color.lerp(interpolated.first, AppColors.background, 0.5)!,
                             AppColors.background,
                           ],
                   ),
@@ -138,18 +138,18 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
             },
           ),
 
-          // ── Dark bottom overlay for readability ───────────────────────────
+          // ── Subtle gradient vignette to protect text & controls readability ──
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  stops: const [0.0, 0.4, 1.0],
+                  stops: const [0.0, 0.5, 1.0],
                   colors: [
                     Colors.black.withOpacity(0.0),
-                    Colors.black.withOpacity(0.15),
-                    Colors.black.withOpacity(0.4), // Kurangi dari 0.7 agar gradasi warna tidak tertutup hitam
+                    Colors.black.withOpacity(0.05),
+                    Colors.black.withOpacity(0.25),
                   ],
                 ),
               ),

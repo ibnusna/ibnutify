@@ -70,24 +70,24 @@ class AlbumArtService {
   }
 
   /// Returns the dominant dark color extracted from [bytes].
-  /// Auto-darkens if luminance > 0.35 to keep notification background readable.
   Future<Color> extractDominantColor(Uint8List bytes, int songId) async {
     if (_colorCache.containsKey(songId)) return _colorCache[songId]!;
 
     try {
       final palette = await PaletteGenerator.fromImageProvider(
         MemoryImage(bytes),
-        maximumColorCount: 20,
+        maximumColorCount: 24,
       );
 
-      // Priority: darkMuted → darkVibrant → muted → dominant → fallback
-      final raw = palette.darkMutedColor?.color ??
+      // Priority: vibrant → darkVibrant → muted → darkMuted → dominant → fallback
+      final raw = palette.vibrantColor?.color ??
           palette.darkVibrantColor?.color ??
           palette.mutedColor?.color ??
+          palette.darkMutedColor?.color ??
           palette.dominantColor?.color ??
           kFallbackColor;
 
-      final color = _clampToDark(raw);
+      final color = _normalizeSpotifyAdaptiveColor(raw);
       _colorCache[songId] = color;
       return color;
     } catch (_) {
@@ -130,7 +130,7 @@ class AlbumArtService {
   }
 
   /// Full pipeline: bytes + dominant color + gradient.
-  /// Returns [AlbumArtResult] with everything needed by the UI.
+  /// Dynamic Spotify background: Top accent color -> Mid transition -> Dark Spotify base.
   Future<AlbumArtResult> process(
     int songId,
     MusicLocalDatasource datasource,
@@ -140,16 +140,19 @@ class AlbumArtService {
       return AlbumArtResult.fallback();
     }
 
-    final color = await extractDominantColor(bytes, songId);
+    final topColor = await extractDominantColor(bytes, songId);
     final path = await saveArtworkToTemp(bytes, songId);
+
+    final midColor = Color.lerp(topColor, const Color(0xFF121212), 0.45)!;
+    final bottomColor = const Color(0xFF121212);
 
     return AlbumArtResult(
       artBytes: bytes,
-      dominantColor: color,
+      dominantColor: topColor,
       gradientColors: [
-        color.withOpacity(0.90),
-        color.withOpacity(0.50),
-        const Color(0xFF121212),
+        topColor,
+        midColor,
+        bottomColor,
       ],
       artUri: path != null ? Uri.file(path) : null,
     );
@@ -157,12 +160,24 @@ class AlbumArtService {
 
   // ─── Private helpers ─────────────────────────────────────────────────────
 
-  /// Clamp raw color luminance for readable backgrounds, but preserve hue identity.
-  Color _clampToDark(Color color) {
+  /// Spotify Adaptive Cover Color Normalizer:
+  /// 1. Menjaga 100% HUE asli dari cover art (merah, biru, hijau, kuning, dll.)
+  /// 2. Menjaga SATURATION di rentang ideal (0.30 - 0.52) agar tidak silau/norak/menabrak
+  /// 3. Menjaga LIGHTNESS di rentang ideal (0.18 - 0.28) agar TIDAK TERLALU TERANG dan TIDAK KUSAM GELAP MATI
+  Color _normalizeSpotifyAdaptiveColor(Color color) {
     final hsl = HSLColor.fromColor(color);
-    if (hsl.lightness <= 0.45) return color;
-    return hsl.withLightness(0.35).withSaturation(
-      (hsl.saturation * 0.9).clamp(0.0, 1.0),
+    
+    // Saturation clamp: 0.30 .. 0.52 (rich tone without neon glare)
+    final clampedSat = hsl.saturation.clamp(0.30, 0.52);
+
+    // Lightness clamp: 0.18 .. 0.28 (warm dark tone without blinding brightness or dull pitch black)
+    final clampedLight = hsl.lightness.clamp(0.18, 0.28);
+
+    return HSLColor.fromAHSL(
+      1.0,
+      hsl.hue,
+      clampedSat,
+      clampedLight,
     ).toColor();
   }
 
