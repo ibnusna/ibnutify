@@ -3,11 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../../data/models/song_model.dart';
+import '../../../data/models/playlist_model.dart';
 import '../../providers/app_providers.dart';
 import '../../screens/player/player_screen.dart';
 import '../../screens/workout/workout_history_screen.dart';
 import '../../widgets/common/song_artwork_widget.dart';
+import '../../widgets/common/dynamic_cover_widget.dart';
 import '../library/playlist_detail_screen.dart';
+import '../library/library_screen.dart';
+import '../profile/user_profile_screen.dart';
+import 'recently_played_screen.dart';
 
 /// Home Screen — mirrors HomeView.tsx
 /// Sections: greeting + filter pills, quick-access grid, recently played, made for you
@@ -28,16 +33,23 @@ class HomeScreen extends ConsumerWidget {
             child: Row(
               children: [
                 // Avatar
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.surfaceContainerHigh,
-                    border: Border.all(color: Colors.white.withOpacity(0.1)),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const UserProfileScreen(),
+                    ),
                   ),
-                  child: const Icon(Icons.person_rounded,
-                      color: AppColors.onSurfaceVariant, size: 18),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.surfaceContainerHigh,
+                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                    ),
+                    child: const Icon(Icons.person_rounded,
+                        color: AppColors.onSurfaceVariant, size: 18),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -76,8 +88,15 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 16),
-                const Icon(Icons.history_rounded,
-                    color: AppColors.onSurfaceVariant, size: 24),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const RecentlyPlayedScreen(),
+                    ),
+                  ),
+                  child: const Icon(Icons.history_rounded,
+                      color: AppColors.onSurfaceVariant, size: 24),
+                ),
                 const SizedBox(width: 16),
                 const Icon(Icons.settings_rounded,
                     color: AppColors.onSurfaceVariant, size: 24),
@@ -198,9 +217,11 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     const Spacer(),
                     GestureDetector(
-                      onTap: () => ref
-                          .read(navigationProvider.notifier)
-                          .navigate(AppScreen.library),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const RecentlyPlayedScreen(),
+                        ),
+                      ),
                       child: const Text(
                         'SHOW ALL',
                         style: TextStyle(
@@ -636,14 +657,22 @@ class _HorizontalSkeleton extends StatelessWidget {
   }
 }
 
-class _NamedPlaylistCard extends StatelessWidget {
+class _NamedPlaylistCard extends ConsumerWidget {
   final NamedPlaylist playlist;
   final VoidCallback onTap;
 
   const _NamedPlaylistCard({required this.playlist, required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playlistsAsync = ref.watch(playlistsProvider);
+    final saved = playlistsAsync.value?.where((p) => p.id == playlist.id).firstOrNull;
+
+    final templateType = saved?.coverTemplateType ?? 'dailymix';
+    final color = saved?.coverColor;
+    final icon = saved?.coverIcon;
+    final title = saved?.coverTitle ?? playlist.name;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -652,39 +681,57 @@ class _NamedPlaylistCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Cover
-            if (playlist.songs.isNotEmpty)
-              SongArtworkWidget(
-                song: playlist.songs.first,
-                size: 140,
-                borderRadius: 8,
-              )
-            else
-              Container(
-                width: 140,
-                height: 140,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.primary.withOpacity(0.4),
-                      AppColors.surfaceContainerHigh,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+            // Cover with subtle action overlay
+            Stack(
+              children: [
+                DynamicCoverWidget(
+                  templateType: templateType,
+                  color: color,
+                  icon: icon,
+                  title: title,
+                  songs: playlist.songs,
+                  size: 140,
+                  borderRadius: 8,
+                ),
+                Positioned(
+                  right: 4,
+                  bottom: 4,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.black54,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 18),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                      onPressed: () {
+                        final pModel = saved ?? PlaylistModel(
+                          id: playlist.id,
+                          name: playlist.name,
+                          description: playlist.description,
+                          songIds: playlist.songs.map((s) => s.id).toList(),
+                          isCustom: false,
+                          createdAt: DateTime.now().millisecondsSinceEpoch,
+                          coverTemplateType: 'dailymix',
+                          coverTitle: playlist.name,
+                        );
+                        showModalBottomSheet(
+                          context: context,
+                          backgroundColor: Colors.transparent,
+                          isScrollControlled: true,
+                          builder: (ctx) => TemplateEditorSheet(playlist: pModel, songs: playlist.songs),
+                        );
+                      },
+                    ),
                   ),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
                 ),
-                child: const Icon(
-                  Icons.library_music_rounded,
-                  size: 48,
-                  color: AppColors.primary,
-                ),
-              ),
+              ],
+            ),
             const SizedBox(height: 8),
             // Title
             Text(
-              playlist.name,
+              title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -710,3 +757,4 @@ class _NamedPlaylistCard extends StatelessWidget {
     );
   }
 }
+

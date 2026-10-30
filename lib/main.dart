@@ -74,15 +74,16 @@ Future<void> main() async {
         androidNotificationChannelName: 'IbnuTify Music',
         androidNotificationChannelDescription: 'IbnuTify music playback controls',
         // ongoing=false memungkinkan user swipe-dismiss saat paused
-        // (Android 13+ wajib: ongoing notification harus bisa dismissed)
         androidNotificationOngoing: false,
         // Stop foreground service saat paused agar notif bisa diswipe
         androidStopForegroundOnPause: true,
-        // Warna aksen di notification (warna hijau Spotify)
+        // Warna aksen di notification (warna hijau IbnuTify)
         notificationColor: Color(0xFF1DB954),
-        // Ukuran artwork di notification: large untuk lockscreen
-        artDownscaleWidth: 300,
-        artDownscaleHeight: 300,
+        // [FIX-ICON] Gunakan ic_notification.png bukan icon Flutter default
+        androidNotificationIcon: 'drawable/ic_notification',
+        // [REQ-4.1] Ukuran artwork di notification: maksimal 512x512
+        artDownscaleWidth: 512,
+        artDownscaleHeight: 512,
       ),
     );
 

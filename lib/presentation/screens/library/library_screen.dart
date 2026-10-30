@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:ibnutify/core/theme/app_theme.dart';
 import 'package:ibnutify/data/models/song_model.dart';
+import 'package:ibnutify/data/models/playlist_model.dart';
 import 'package:ibnutify/presentation/providers/app_providers.dart';
 import 'package:ibnutify/presentation/providers/online_art_provider.dart';
 import 'package:ibnutify/presentation/widgets/common/song_list_tile.dart';
 import 'package:ibnutify/presentation/widgets/common/song_artwork_widget.dart';
+import 'package:ibnutify/presentation/widgets/common/dynamic_cover_widget.dart';
 import 'package:ibnutify/presentation/screens/library/playlist_detail_screen.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
@@ -294,60 +296,103 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 160),
       children: [
         // Recently Played (24h)
-        if (recentlyPlayed.isNotEmpty)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(8),
+        if (recentlyPlayed.isNotEmpty) ...[
+          () {
+            final saved = playlists.where((p) => p.id == 'system_recently_played').firstOrNull;
+            final pModel = saved ?? PlaylistModel(
+              id: 'system_recently_played',
+              name: 'Recently Played',
+              description: 'Songs played recently',
+              songIds: recentlyPlayed.map((s) => s.id).toList(),
+              isCustom: false,
+              createdAt: DateTime.now().millisecondsSinceEpoch,
+              coverTemplateType: 'minimal',
+              coverColor: 'purple-indigo',
+              coverIcon: 'ph-music-notes',
+              coverTitle: 'Sering Diputar',
+            );
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: DynamicCoverWidget(
+                templateType: pModel.coverTemplateType ?? 'minimal',
+                color: pModel.coverColor ?? 'purple-indigo',
+                icon: pModel.coverIcon ?? 'ph-music-notes',
+                title: pModel.coverTitle ?? 'Sering Diputar',
+                songs: recentlyPlayed,
+                size: 56,
+                borderRadius: 8,
               ),
-              child: const Icon(Icons.history_rounded, color: AppColors.primary),
+              title: Text(pModel.coverTitle ?? 'Recently Played',
+                  style: const TextStyle(color: AppColors.onSurface, fontWeight: FontWeight.w700)),
+              subtitle: Text('${recentlyPlayed.length} songs recently played',
+                  style: const TextStyle(color: AppColors.onSurfaceVariant, fontSize: 12)),
+              trailing: IconButton(
+                icon: const Icon(Icons.more_vert_rounded, color: AppColors.onSurfaceVariant, size: 22),
+                onPressed: () => _openCoverEditor(context, pModel, recentlyPlayed),
+                tooltip: 'Edit Cover Playlist',
+              ),
+              onTap: () {
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => PlaylistDetailScreen(
+                    title: pModel.coverTitle ?? 'Recently Played',
+                    description: 'Songs played recently',
+                    initialSongs: recentlyPlayed,
+                    playlistId: 'system_recently_played',
+                  ),
+                ));
+              },
+            );
+          }(),
+          const SizedBox(height: 8),
+        ],
+
+        // Top Songs (On Repeat)
+        () {
+          final saved = playlists.where((p) => p.id == 'system_on_repeat').firstOrNull;
+          final pModel = saved ?? PlaylistModel(
+            id: 'system_on_repeat',
+            name: 'On Repeat',
+            description: 'Your top 20 most listened songs',
+            songIds: topSongs.map((s) => s.id).toList(),
+            isCustom: false,
+            createdAt: DateTime.now().millisecondsSinceEpoch,
+            coverTemplateType: 'minimal',
+            coverColor: 'pink-rose',
+            coverIcon: 'ph-infinity',
+            coverTitle: 'On Repeat',
+          );
+          return ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: DynamicCoverWidget(
+              templateType: pModel.coverTemplateType ?? 'minimal',
+              color: pModel.coverColor ?? 'pink-rose',
+              icon: pModel.coverIcon ?? 'ph-infinity',
+              title: pModel.coverTitle ?? 'On Repeat',
+              songs: topSongs,
+              size: 56,
+              borderRadius: 8,
             ),
-            title: const Text('Recently Played',
-                style: TextStyle(color: AppColors.onSurface, fontWeight: FontWeight.w700)),
-            subtitle: Text('${recentlyPlayed.length} songs recently played',
-                style: const TextStyle(color: AppColors.onSurfaceVariant, fontSize: 12)),
+            title: Text(pModel.coverTitle ?? 'On Repeat',
+                style: const TextStyle(color: AppColors.onSurface, fontWeight: FontWeight.w700)),
+            subtitle: const Text('Your top 20 most listened songs',
+                style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 12)),
+            trailing: IconButton(
+              icon: const Icon(Icons.more_vert_rounded, color: AppColors.onSurfaceVariant, size: 22),
+              onPressed: () => _openCoverEditor(context, pModel, topSongs),
+              tooltip: 'Edit Cover Playlist',
+            ),
             onTap: () {
               Navigator.of(context).push(MaterialPageRoute(
                 builder: (_) => PlaylistDetailScreen(
-                  title: 'Recently Played',
-                  description: 'Songs played recently',
-                  initialSongs: recentlyPlayed,
+                  title: pModel.coverTitle ?? 'On Repeat',
+                  description: 'Songs you listen to the most.',
+                  initialSongs: topSongs,
+                  playlistId: 'system_on_repeat',
                 ),
               ));
             },
-          ),
-        if (recentlyPlayed.isNotEmpty) const SizedBox(height: 8),
-
-        // Top Songs
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.trending_up_rounded, color: AppColors.primary),
-          ),
-          title: const Text('On Repeat',
-              style: TextStyle(color: AppColors.onSurface, fontWeight: FontWeight.w700)),
-          subtitle: const Text('Your top 20 most listened songs',
-              style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 12)),
-          onTap: () {
-            Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => PlaylistDetailScreen(
-                title: 'On Repeat',
-                description: 'Songs you listen to the most.',
-                initialSongs: topSongs,
-              ),
-            ));
-          },
-        ),
+          );
+        }(),
         const SizedBox(height: 12),
 
         // Daily Mixes
@@ -357,31 +402,46 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             child: Text('Made For You', style: TextStyle(color: AppColors.onSurfaceVariant, fontWeight: FontWeight.bold, fontSize: 13)),
           ),
           ...dailyMixes.map((mix) {
+            final saved = playlists.where((p) => p.id == mix.id).firstOrNull;
+            final pModel = saved ?? PlaylistModel(
+              id: mix.id,
+              name: mix.name,
+              description: mix.description,
+              songIds: mix.songs.map((s) => s.id).toList(),
+              isCustom: false,
+              createdAt: DateTime.now().millisecondsSinceEpoch,
+              coverTemplateType: 'dailymix',
+              coverTitle: mix.name,
+            );
             return ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: mix.songs.isNotEmpty
-                  ? SongArtworkWidget(song: mix.songs.first, size: 56, borderRadius: 8)
-                  : Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.auto_awesome_rounded, color: AppColors.primary),
-                    ),
-              title: Text(mix.name,
+              leading: DynamicCoverWidget(
+                templateType: pModel.coverTemplateType ?? 'dailymix',
+                color: pModel.coverColor,
+                icon: pModel.coverIcon,
+                title: pModel.coverTitle ?? mix.name,
+                songs: mix.songs,
+                size: 56,
+                borderRadius: 8,
+              ),
+              title: Text(pModel.coverTitle ?? mix.name,
                   style: const TextStyle(color: AppColors.onSurface, fontWeight: FontWeight.w700)),
               subtitle: Text(mix.description,
                   style: const TextStyle(color: AppColors.onSurfaceVariant, fontSize: 12),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis),
+              trailing: IconButton(
+                icon: const Icon(Icons.more_vert_rounded, color: AppColors.onSurfaceVariant, size: 22),
+                onPressed: () => _openCoverEditor(context, pModel, mix.songs),
+                tooltip: 'Edit Cover Playlist',
+              ),
               onTap: () {
                 Navigator.of(context).push(MaterialPageRoute(
                   builder: (_) => PlaylistDetailScreen(
-                    title: mix.name,
+                    title: pModel.coverTitle ?? mix.name,
                     description: mix.description,
                     initialSongs: mix.songs,
+                    playlistId: mix.id,
                   ),
                 ));
               },
@@ -397,31 +457,48 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             child: Text('Song Eras', style: TextStyle(color: AppColors.onSurfaceVariant, fontWeight: FontWeight.bold, fontSize: 13)),
           ),
           ...songEras.map((era) {
+            final saved = playlists.where((p) => p.id == era.name).firstOrNull;
+            final pModel = saved ?? PlaylistModel(
+              id: era.name,
+              name: era.name,
+              description: era.description,
+              songIds: era.songs.map((s) => s.id).toList(),
+              isCustom: false,
+              createdAt: DateTime.now().millisecondsSinceEpoch,
+              coverTemplateType: 'minimal',
+              coverColor: 'blue-cyan',
+              coverIcon: 'ph-moon-stars',
+              coverTitle: era.name,
+            );
             return ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: era.songs.isNotEmpty
-                  ? SongArtworkWidget(song: era.songs.first, size: 56, borderRadius: 8)
-                  : Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.schedule_rounded, color: AppColors.primary),
-                    ),
-              title: Text(era.name,
+              leading: DynamicCoverWidget(
+                templateType: pModel.coverTemplateType ?? 'minimal',
+                color: pModel.coverColor ?? 'blue-cyan',
+                icon: pModel.coverIcon ?? 'ph-moon-stars',
+                title: pModel.coverTitle ?? era.name,
+                songs: era.songs,
+                size: 56,
+                borderRadius: 8,
+              ),
+              title: Text(pModel.coverTitle ?? era.name,
                   style: const TextStyle(color: AppColors.onSurface, fontWeight: FontWeight.w700)),
               subtitle: Text(era.description,
                   style: const TextStyle(color: AppColors.onSurfaceVariant, fontSize: 12),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis),
+              trailing: IconButton(
+                icon: const Icon(Icons.more_vert_rounded, color: AppColors.onSurfaceVariant, size: 22),
+                onPressed: () => _openCoverEditor(context, pModel, era.songs),
+                tooltip: 'Edit Cover Playlist',
+              ),
               onTap: () {
                 Navigator.of(context).push(MaterialPageRoute(
                   builder: (_) => PlaylistDetailScreen(
-                    title: era.name,
+                    title: pModel.coverTitle ?? era.name,
                     description: era.description,
                     initialSongs: era.songs,
+                    playlistId: era.name,
                   ),
                 ));
               },
@@ -438,30 +515,35 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           ),
         ],
         ...playlists.map((p) {
+          final pSongs = allSongs.where((s) => p.songIds.contains(s.id)).toList();
           return ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: AppColors.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.queue_music_rounded,
-                  color: AppColors.onSurfaceVariant),
+            leading: DynamicCoverWidget(
+              templateType: p.coverTemplateType ?? 'minimal',
+              color: p.coverColor ?? 'purple-indigo',
+              icon: p.coverIcon ?? 'ph-music-notes',
+              title: p.coverTitle ?? p.name,
+              songs: pSongs,
+              size: 56,
+              borderRadius: 8,
             ),
             title: Text(p.name,
                 style: const TextStyle(
                     color: AppColors.onSurface, fontWeight: FontWeight.w700)),
-            subtitle: Text('${p.songIds.length} songs',
+            subtitle: Text('${p.songIds.length} songs • Playlist',
                 style: const TextStyle(
                     color: AppColors.onSurfaceVariant, fontSize: 12)),
+            trailing: IconButton(
+              icon: const Icon(Icons.more_vert_rounded, color: AppColors.onSurfaceVariant, size: 22),
+              onPressed: () => _openCoverEditor(context, p, pSongs),
+              tooltip: 'Edit Cover Playlist',
+            ),
             onTap: () {
               Navigator.of(context).push(MaterialPageRoute(
                 builder: (_) => PlaylistDetailScreen(
                   title: p.name,
                   description: p.description ?? '',
-                  initialSongs: const [],
+                  initialSongs: pSongs,
                   playlistId: p.id,
                 ),
               ));
@@ -798,6 +880,15 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       ),
     );
   }
+
+  void _openCoverEditor(BuildContext context, PlaylistModel playlist, List<SongModel> songs) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => TemplateEditorSheet(playlist: playlist, songs: songs),
+    );
+  }
 }
 
 class _EmptyState extends StatelessWidget {
@@ -872,3 +963,318 @@ class _EmptyState extends StatelessWidget {
     );
   }
 }
+
+class TemplateEditorSheet extends ConsumerStatefulWidget {
+  final PlaylistModel playlist;
+  final List<SongModel> songs;
+
+  const TemplateEditorSheet({
+    required this.playlist,
+    required this.songs,
+  });
+
+  @override
+  ConsumerState<TemplateEditorSheet> createState() => TemplateEditorSheetState();
+}
+
+class TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
+  late String _selectedTemplate;
+  late String _selectedColor;
+  late String _selectedIcon;
+  late TextEditingController _titleController;
+
+  final List<Map<String, String>> _templates = [
+    {'id': 'minimal', 'name': 'Minimalist'},
+    {'id': 'collage', 'name': 'Collage 2x2'},
+    {'id': 'dailymix', 'name': 'Daily Mix'},
+  ];
+
+  final List<Map<String, String>> _colorPresets = [
+    {'id': 'purple-indigo', 'name': 'Purple Indigo'},
+    {'id': 'pink-rose', 'name': 'Pink Rose'},
+    {'id': 'green-emerald', 'name': 'Green Emerald'},
+    {'id': 'blue-cyan', 'name': 'Blue Cyan'},
+    {'id': 'orange-red', 'name': 'Orange Red'},
+    {'id': 'zinc-black', 'name': 'Zinc Dark'},
+  ];
+
+  final List<Map<String, dynamic>> _iconPresets = [
+    {'id': 'ph-music-notes', 'icon': Icons.music_note_rounded, 'name': 'Music'},
+    {'id': 'ph-infinity', 'icon': Icons.all_inclusive_rounded, 'name': 'Repeat'},
+    {'id': 'ph-heart-fill', 'icon': Icons.favorite_rounded, 'name': 'Heart'},
+    {'id': 'ph-star', 'icon': Icons.star_rounded, 'name': 'Star'},
+    {'id': 'ph-moon-stars', 'icon': Icons.nightlight_round, 'name': 'Moon'},
+    {'id': 'ph-fire', 'icon': Icons.local_fire_department_rounded, 'name': 'Fire'},
+    {'id': 'ph-coffee', 'icon': Icons.coffee_rounded, 'name': 'Coffee'},
+    {'id': 'ph-car-profile', 'icon': Icons.directions_car_rounded, 'name': 'Drive'},
+    {'id': 'ph-cloud-rain', 'icon': Icons.water_drop_rounded, 'name': 'Rain'},
+    {'id': 'ph-headset', 'icon': Icons.headset_rounded, 'name': 'Focus'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedTemplate = widget.playlist.coverTemplateType ?? 'minimal';
+    _selectedColor = widget.playlist.coverColor ?? 'purple-indigo';
+    _selectedIcon = widget.playlist.coverIcon ?? 'ph-music-notes';
+    _titleController = TextEditingController(
+      text: widget.playlist.coverTitle ?? widget.playlist.name,
+    );
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveCover() async {
+    await ref.read(playlistsProvider.notifier).updateCover(
+      widget.playlist.id,
+      coverTemplateType: _selectedTemplate,
+      coverColor: _selectedColor,
+      coverIcon: _selectedIcon,
+      coverTitle: _titleController.text.trim(),
+    );
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceContainerHigh,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header bar
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Edit Playlist Cover',
+                  style: TextStyle(
+                    color: AppColors.onSurface,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded, color: AppColors.onSurfaceVariant),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Live Preview
+            Center(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.5),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: DynamicCoverWidget(
+                  templateType: _selectedTemplate,
+                  color: _selectedColor,
+                  icon: _selectedIcon,
+                  title: _titleController.text.isEmpty ? widget.playlist.name : _titleController.text,
+                  songs: widget.songs,
+                  size: 160,
+                  borderRadius: 16,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Template Selector
+            const Text(
+              'Template Style',
+              style: TextStyle(
+                color: AppColors.onSurfaceVariant,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: _templates.map((t) {
+                final isSelected = t['id'] == _selectedTemplate;
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: ChoiceChip(
+                      label: Text(t['name']!),
+                      selected: isSelected,
+                      selectedColor: AppColors.primary,
+                      backgroundColor: AppColors.surfaceContainerHighest,
+                      labelStyle: TextStyle(
+                        color: isSelected ? AppColors.background : AppColors.onSurface,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontSize: 12,
+                      ),
+                      onSelected: (val) {
+                        if (val) setState(() => _selectedTemplate = t['id']!);
+                      },
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+
+            // Title Customization
+            const Text(
+              'Cover Title Text',
+              style: TextStyle(
+                color: AppColors.onSurfaceVariant,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _titleController,
+              onChanged: (_) => setState(() {}),
+              style: const TextStyle(color: AppColors.onSurface),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: AppColors.surfaceContainerHighest,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                hintText: 'Enter title overlay text',
+                hintStyle: const TextStyle(color: AppColors.onSurfaceVariant),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Color Preset Selector (Show for minimal / collage)
+            if (_selectedTemplate != 'dailymix') ...[
+              const Text(
+                'Color Palette',
+                style: TextStyle(
+                  color: AppColors.onSurfaceVariant,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 40,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: _colorPresets.map((c) {
+                    final isSelected = c['id'] == _selectedColor;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        selected: isSelected,
+                        label: Text(c['name']!),
+                        selectedColor: AppColors.primary,
+                        backgroundColor: AppColors.surfaceContainerHighest,
+                        labelStyle: TextStyle(
+                          color: isSelected ? AppColors.background : AppColors.onSurface,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 12,
+                        ),
+                        onSelected: (val) {
+                          if (val) setState(() => _selectedColor = c['id']!);
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Icon Selector (Show for minimal)
+            if (_selectedTemplate == 'minimal') ...[
+              const Text(
+                'Center Icon',
+                style: TextStyle(
+                  color: AppColors.onSurfaceVariant,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 48,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: _iconPresets.map((ic) {
+                    final isSelected = ic['id'] == _selectedIcon;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: InkWell(
+                        onTap: () => setState(() => _selectedIcon = ic['id']!),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: isSelected ? AppColors.primary : AppColors.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected ? AppColors.primary : Colors.transparent,
+                            ),
+                          ),
+                          child: Icon(
+                            ic['icon'] as IconData,
+                            color: isSelected ? AppColors.background : AppColors.onSurface,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
+            // Save Button
+            ElevatedButton(
+              onPressed: _saveCover,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
+                ),
+              ),
+              child: const Text(
+                'Save Cover',
+                style: TextStyle(
+                  color: AppColors.background,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

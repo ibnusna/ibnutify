@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>IbnuTify - My Library & Cover Editor</title>
+    
+    <!-- Mengimpor font Be Vietnam Pro sesuai spesifikasi desain -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Mengimpor Phosphor Icons untuk ikon-ikon estetik -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <!-- Memuat Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Konfigurasi Tailwind berdasarkan DESIGN.md -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        surface: '#0e150e',
+                        'surface-dim': '#0e150e',
+                        'surface-bright': '#333b33',
+                        'surface-container-lowest': '#091009',
+                        'surface-container-low': '#161d16',
+                        'surface-container': '#1a211a',
+                        'surface-container-high': '#242c24',
+                        'surface-container-highest': '#2f372e',
+                        'on-surface': '#dde5d9',
+                        'on-surface-variant': '#bccbb9',
+                        'outline': '#869585',
+                        primary: '#53e076',
+                        'on-primary': '#003914',
+                        background: '#0e150e',
+                        'on-background': '#dde5d9',
+                    },
+                    fontFamily: {
+                        sans: ['"Be Vietnam Pro"', 'sans-serif'],
+                    },
+                    fontSize: {
+                        'display-lg': ['32px', { lineHeight: '40px', letterSpacing: '-0.02em', fontWeight: '800' }],
+                        'headline-md': ['24px', { lineHeight: '32px', letterSpacing: '-0.01em', fontWeight: '700' }],
+                        'title-sm': ['16px', { lineHeight: '24px', fontWeight: '700' }],
+                        'body-md': ['14px', { lineHeight: '20px', fontWeight: '400' }],
+                        'label-sm': ['12px', { lineHeight: '16px', letterSpacing: '0.01em', fontWeight: '400' }],
+                        'metadata': ['11px', { lineHeight: '14px', fontWeight: '400' }],
+                    },
+                    borderRadius: {
+                        'sm': '0.25rem',
+                        DEFAULT: '0.5rem',
+                        'md': '0.75rem',
+                        'lg': '1rem',
+                        'xl': '1.5rem',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom Styles untuk Scrollbar dan Utilities */
+        body {
+            background-color: #000; /* Latar luar untuk desktop */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        /* Container aplikasi bergaya mobile */
+        #app-container {
+            width: 100%;
+            max-width: 414px; /* Lebar maksimal layaknya smartphone */
+            height: 100%;
+            max-height: 896px;
+            background-color: #0e150e;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        /* Menyembunyikan scrollbar untuk estetika mobile */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Efek teks gradient untuk cover artis/daily mix */
+        .cover-text-shadow {
+            text-shadow: 0px 4px 12px rgba(0, 0, 0, 0.8), 0px 1px 2px rgba(0,0,0,1);
+        }
+
+        /* Animasi transisi antar layar */
+        .screen-slide-in {
+            animation: slideIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+        .screen-slide-out {
+            animation: slideOut 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes slideOut {
+            from { transform: translateY(0); opacity: 1; }
+            to { transform: translateY(100%); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="text-on-background antialiased selection:bg-primary selection:text-on-primary">
+
+    <div id="app-container">
+        
+        <!-- ==================== SCREEN: MY LIBRARY ==================== -->
+        <main id="library-screen" class="flex-1 flex flex-col h-full w-full relative z-10 bg-background overflow-hidden">
+            
+            <!-- Sticky Header -->
+            <header class="px-4 pt-6 pb-2 sticky top-0 z-20 bg-background/90 backdrop-blur-md">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <img src="https://ui-avatars.com/api/?name=Ibnu&background=1a211a&color=dde5d9" alt="Profile" class="w-8 h-8 rounded-full border border-surface-container-highest">
+                        <h1 class="text-headline-md text-on-surface">Koleksi Kamu</h1>
+                    </div>
+                    <div class="flex items-center gap-4 text-on-surface">
+                        <button class="hover:text-primary transition-colors"><i class="ph ph-magnifying-glass text-2xl"></i></button>
+                        <button onclick="openEditor('new')" class="hover:text-primary transition-colors"><i class="ph ph-plus text-2xl"></i></button>
+                    </div>
+                </div>
+
+                <!-- Filter Chips -->
+                <div class="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+                    <button class="px-4 py-1.5 rounded-full bg-surface-container-high text-on-surface text-body-md border border-transparent hover:border-outline-variant whitespace-nowrap">Playlist</button>
+                    <button class="px-4 py-1.5 rounded-full bg-surface-container-high text-on-surface text-body-md border border-transparent hover:border-outline-variant whitespace-nowrap">Podcast</button>
+                    <button class="px-4 py-1.5 rounded-full bg-surface-container-high text-on-surface text-body-md border border-transparent hover:border-outline-variant whitespace-nowrap">Album</button>
+                </div>
+            </header>
+
+            <!-- Library Content / Playlist List -->
+            <div id="playlist-container" class="flex-1 overflow-y-auto px-4 pb-32 no-scrollbar flex flex-col gap-4">
+                <!-- Daftar playlist akan dirender melalui JavaScript -->
+            </div>
+
+            <!-- Floating Now Playing Bar -->
+            <div class="absolute bottom-[60px] left-2 right-2 bg-surface-container-highest rounded-md mx-2 mb-2 p-2 flex items-center justify-between shadow-lg border border-surface-bright">
+                <div class="w-full absolute top-0 left-0 h-[2px] bg-surface-bright rounded-t-md overflow-hidden">
+                    <div class="h-full bg-on-surface w-1/3"></div>
+                </div>
+                <div class="flex items-center gap-3 mt-1 w-full">
+                    <img src="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100&q=80" class="w-10 h-10 rounded-sm" alt="Now Playing">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-body-md font-bold text-on-surface truncate">Melompat Lebih Tinggi</p>
+                        <p class="text-label-sm text-on-surface-variant truncate">Lomba Sihir</p>
+                    </div>
+                    <div class="flex items-center gap-3 text-on-surface px-2">
+                        <i class="ph ph-speaker-high text-xl"></i>
+                        <i class="ph ph-heart text-xl"></i>
+                        <i class="ph-fill ph-play text-xl"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Navigation -->
+            <nav class="absolute bottom-0 w-full bg-background/95 backdrop-blur-md pb-safe border-t border-surface-container flex justify-around py-3 px-2 z-20">
+                <button class="flex flex-col items-center gap-1 text-on-surface-variant hover:text-on-surface">
+                    <i class="ph ph-house text-2xl"></i>
+                    <span class="text-metadata">Home</span>
+                </button>
+                <button class="flex flex-col items-center gap-1 text-on-surface-variant hover:text-on-surface">
+                    <i class="ph ph-magnifying-glass text-2xl"></i>
+                    <span class="text-metadata">Cari</span>
+                </button>
+                <button class="flex flex-col items-center gap-1 text-on-surface">
+                    <i class="ph-fill ph-books text-2xl"></i>
+                    <span class="text-metadata font-bold">Koleksi Kamu</span>
+                </button>
+                <button class="flex flex-col items-center gap-1 text-on-surface-variant hover:text-on-surface">
+                    <i class="ph ph-spotify-logo text-2xl"></i>
+                    <span class="text-metadata">Premium</span>
+                </button>
+            </nav>
+        </main>
+
+        <!-- ==================== SCREEN: COVER EDITOR ==================== -->
+        <section id="editor-screen" class="absolute inset-0 z-50 bg-background flex flex-col hidden transform translate-y-full">
+            
+            <!-- Editor Header -->
+            <header class="px-4 py-4 flex items-center justify-between border-b border-surface-container">
+                <button onclick="closeEditor()" class="text-on-surface"><i class="ph ph-x text-2xl"></i></button>
+                <h2 class="text-title-sm font-bold text-on-surface" id="editor-title">Buat Cover Playlist</h2>
+                <button onclick="saveCover()" class="text-primary text-title-sm font-bold hover:text-primary-fixed-dim">Simpan</button>
+            </header>
+
+            <div class="flex-1 overflow-y-auto no-scrollbar pb-10">
+                <!-- Cover Preview Area -->
+                <div class="w-full flex justify-center items-center p-8 bg-surface-container-lowest">
+                    <!-- Ukuran standar album cover 1:1 -->
+                    <div id="cover-preview-container" class="w-64 h-64 rounded-lg shadow-2xl overflow-hidden relative transition-all duration-300">
+                        <!-- Preview akan dirender di sini via JS -->
+                    </div>
+                </div>
+
+                <!-- Editor Controls -->
+                <div class="px-4 py-6 flex flex-col gap-6">
+                    
+                    <!-- Text Input -->
+                    <div>
+                        <label class="block text-label-sm text-on-surface-variant mb-2">Judul Playlist</label>
+                        <input type="text" id="input-title" placeholder="Misal: Daily Mix 1" 
+                               class="w-full bg-surface-container border border-surface-bright rounded-md px-4 py-3 text-body-md text-on-surface focus:outline-none focus:border-primary placeholder-on-surface-variant transition-colors"
+                               oninput="updatePreview()">
+                    </div>
+
+                    <!-- Template Type Selection -->
+                    <div>
+                        <label class="block text-label-sm text-on-surface-variant mb-2">Pilih Template</label>
+                        <div class="flex bg-surface-container rounded-md p-1">
+                            <button onclick="setTemplate('minimal')" id="tab-minimal" class="flex-1 py-2 text-label-sm font-bold rounded bg-surface-container-high text-on-surface shadow">Ikonik</button>
+                            <button onclick="setTemplate('dailymix')" id="tab-dailymix" class="flex-1 py-2 text-label-sm font-bold rounded text-on-surface-variant hover:text-on-surface">Artis</button>
+                            <button onclick="setTemplate('collage')" id="tab-collage" class="flex-1 py-2 text-label-sm font-bold rounded text-on-surface-variant hover:text-on-surface">Kolase</button>
+                        </div>
+                    </div>
+
+                    <!-- Controls for 'Minimal' (Ikonik) -->
+                    <div id="controls-minimal" class="flex flex-col gap-4">
+                        <div>
+                            <label class="block text-label-sm text-on-surface-variant mb-2">Warna Latar (Estetik)</label>
+                            <div class="flex gap-3 overflow-x-auto no-scrollbar pb-2" id="color-presets">
+                                <!-- Generated by JS -->
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-label-sm text-on-surface-variant mb-2">Ikon Vektor</label>
+                            <div class="grid grid-cols-5 gap-3" id="icon-presets">
+                                <!-- Generated by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Controls for 'Daily Mix' (Artis) -->
+                    <div id="controls-dailymix" class="hidden flex-col gap-4">
+                        <div>
+                            <label class="block text-label-sm text-on-surface-variant mb-2">Pilih Foto Artis / Mood</label>
+                            <div class="grid grid-cols-3 gap-3" id="artist-presets">
+                                <!-- Generated by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Controls for 'Collage' (Kolase) -->
+                    <div id="controls-collage" class="hidden flex-col gap-4">
+                        <p class="text-label-sm text-on-surface-variant">Sistem otomatis mengambil 4 foto album teratas dari playlist Anda untuk membuat kolase grid yang estetik.</p>
+                        <div class="grid grid-cols-2 gap-2 w-32 h-32 mx-auto rounded-md overflow-hidden opacity-70" id="collage-demo-grid">
+                            <!-- Visual cue only -->
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // --- DATA & STATE MANAGEMENT ---
+
+        // Konfigurasi Preset
+        const presets = {
+            colors: [
+                'bg-gradient-to-br from-purple-800 to-indigo-900',
+                'bg-gradient-to-br from-pink-600 to-rose-900',
+                'bg-gradient-to-br from-green-500 to-emerald-900',
+                'bg-gradient-to-br from-blue-500 to-cyan-900',
+                'bg-gradient-to-br from-orange-500 to-red-900',
+                'bg-gradient-to-br from-zinc-700 to-black',
+            ],
+            icons: [
+                'ph-infinity', 'ph-heart-straight', 'ph-star', 'ph-music-notes', 
+                'ph-moon-stars', 'ph-fire', 'ph-coffee', 'ph-car-profile', 
+                'ph-cloud-rain', 'ph-headset'
+            ],
+            artistImages: [
+                'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80', // Band
+                'https://images.unsplash.com/photo-1493225457124-a1a2a5f5f9af?w=500&q=80', // Singer
+                'https://images.unsplash.com/photo-1520697517641-b47233061280?w=500&q=80', // Guitarist
+                'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500&q=80', // Vibe
+                'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&q=80', // DJ
+            ],
+            collageImages: [
+                'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=300&q=80',
+                'https://images.unsplash.com/photo-1619983081563-430f63602796?w=300&q=80',
+                'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300&q=80',
+                'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=300&q=80',
+            ]
+        };
+
+        // State Aplikasi
+        let appState = {
+            playlists: [
+                {
+                    id: 'p1',
+                    creator: 'Dibuat untukmu',
+                    isSystem: true,
+                    cover: {
+                        type: 'minimal',
+                        title: 'Sering Diputar',
+                        color: 'bg-gradient-to-br from-pink-600 to-rose-900',
+                        icon: 'ph-infinity'
+                    }
+                },
+                {
+                    id: 'p2',
+                    creator: 'Dibuat untukmu',
+                    isSystem: true,
+                    cover: {
+                        type: 'dailymix',
+                        title: 'Daily Mix 3',
+                        image: presets.artistImages[0]
+                    }
+                },
+                {
+                    id: 'p3',
+                    creator: 'Ibnu',
+                    isSystem: false,
+                    cover: {
+                        type: 'collage',
+                        title: 'My Playlist #22',
+                        images: presets.collageImages
+                    }
+                },
+                {
+                    id: 'p4',
+                    creator: 'Ibnu',
+                    isSystem: false,
+                    cover: {
+                        type: 'minimal',
+                        title: 'Lagu yang Disukai',
+                        color: 'bg-gradient-to-br from-indigo-500 to-purple-800',
+                        icon: 'ph-heart-fill'
+                    }
+                }
+            ],
+            editor: {
+                mode: 'new', // 'new' atau ID playlist
+                currentData: {
+                    type: 'minimal',
+                    title: 'Playlist Baru',
+                    color: presets.colors[0],
+                    icon: presets.icons[0],
+                    image: presets.artistImages[1],
+                    images: presets.collageImages
+                }
+            }
+        };
+
+        // --- CORE RENDER ENGINE UNTUK COVER (HTML/CSS Based) ---
+        
+        /**
+         * Fungsi utama untuk membuat visualisasi Cover berbasis DOM.
+         * Ini memungkinkan pembuatan cover tanpa image upload, full CSS & Ikon.
+         */
+        function generateCoverHTML(data, isPreview = false) {
+            // Skala teks dan ikon berdasarkan ukuran container
+            const titleClass = isPreview ? 'text-display-lg px-4 pb-4' : 'text-body-md px-2 pb-2 leading-tight';
+            const iconSize = isPreview ? 'text-8xl' : 'text-3xl';
+            const textShadow = 'cover-text-shadow'; // Dari custom CSS
+
+            // 1. Template: Minimalis / Ikonik (Sering Diputar)
+            if (data.type === 'minimal') {
+                return `
+                    <div class="w-full h-full relative ${data.color} flex flex-col justify-center items-center p-2">
+                        <i class="ph ${data.icon} ${iconSize} text-white/80 mb-4 drop-shadow-md"></i>
+                        <div class="absolute bottom-0 left-0 w-full text-left">
+                            <h3 class="${titleClass} font-extrabold text-white tracking-tight ${textShadow}">${data.title}</h3>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // 2. Template: Foto Artis (Daily Mix)
+            if (data.type === 'dailymix') {
+                return `
+                    <div class="w-full h-full relative bg-surface-container-high bg-cover bg-center" style="background-image: url('${data.image}')">
+                        <!-- Gradient Overlay untuk keterbacaan teks -->
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
+                        <div class="absolute bottom-0 left-0 w-full text-left">
+                            <h3 class="${titleClass} font-extrabold text-white tracking-tight ${textShadow}">${data.title}</h3>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // 3. Template: Kolase 2x2 (Custom Playlist)
+            if (data.type === 'collage') {
+                return `
+                    <div class="w-full h-full relative grid grid-cols-2 grid-rows-2">
+                        ${(data.images || presets.collageImages).map(img => `
+                            <div class="w-full h-full bg-cover bg-center" style="background-image: url('${img}')"></div>
+                        `).join('')}
+                        <!-- Gradient Overlay -->
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent"></div>
+                        <div class="absolute bottom-0 left-0 w-full text-left flex items-center justify-center h-full">
+                            <div class="bg-black/40 backdrop-blur-sm w-full absolute bottom-0">
+                                <h3 class="${titleClass} font-bold text-white text-center pt-2 pb-2">${data.title}</h3>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            return `<div class="w-full h-full bg-surface-container"></div>`;
+        }
+
+
+        // --- UI RENDERING & LOGIC ---
+
+        function renderLibrary() {
+            const container = document.getElementById('playlist-container');
+            container.innerHTML = ''; // Clear
+
+            appState.playlists.forEach(playlist => {
+                const coverHTML = generateCoverHTML(playlist.cover, false);
+                
+                const itemHTML = `
+                    <div class="flex items-center gap-3 w-full group cursor-pointer" onclick="editPlaylist('${playlist.id}')">
+                        <!-- Thumbnail (64x64) -->
+                        <div class="w-16 h-16 shrink-0 rounded overflow-hidden shadow-sm">
+                            ${coverHTML}
+                        </div>
+                        
+                        <!-- Metadata -->
+                        <div class="flex-1 min-w-0 flex flex-col justify-center">
+                            <h4 class="text-title-sm text-on-surface truncate">${playlist.cover.title}</h4>
+                            <p class="text-label-sm text-on-surface-variant flex items-center gap-1">
+                                ${playlist.isSystem ? '<i class="ph-fill ph-spotify-logo text-primary text-sm"></i>' : ''}
+                                Playlist • ${playlist.creator}
+                            </p>
+                        </div>
+
+                        <!-- Action/Edit Icon (muncul saat di-tap/hover) -->
+                        <button class="p-2 text-on-surface-variant hover:text-on-surface" onclick="event.stopPropagation(); editPlaylist('${playlist.id}')">
+                            <i class="ph ph-dots-three-vertical text-xl"></i>
+                        </button>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', itemHTML);
+            });
+        }
+
+        function openEditor(playlistId = 'new') {
+            const editorScreen = document.getElementById('editor-screen');
+            
+            if (playlistId === 'new') {
+                appState.editor.mode = 'new';
+                document.getElementById('editor-title').innerText = 'Buat Cover Playlist';
+                // Reset data
+                appState.editor.currentData = {
+                    type: 'minimal',
+                    title: 'Playlist Baru',
+                    color: presets.colors[0],
+                    icon: presets.icons[0],
+                    image: presets.artistImages[1],
+                    images: presets.collageImages
+                };
+            } else {
+                appState.editor.mode = playlistId;
+                document.getElementById('editor-title').innerText = 'Edit Cover';
+                const existing = appState.playlists.find(p => p.id === playlistId);
+                // Deep copy agar tidak mutate langsung sebelum save
+                appState.editor.currentData = JSON.parse(JSON.stringify(existing.cover));
+            }
+
+            // Sinkronisasi UI Form
+            document.getElementById('input-title').value = appState.editor.currentData.title;
+            setTemplate(appState.editor.currentData.type);
+            
+            // Tampilkan layar
+            editorScreen.classList.remove('hidden');
+            editorScreen.classList.remove('screen-slide-out');
+            editorScreen.classList.add('screen-slide-in');
+        }
+
+        function closeEditor() {
+            const editorScreen = document.getElementById('editor-screen');
+            editorScreen.classList.remove('screen-slide-in');
+            editorScreen.classList.add('screen-slide-out');
+            setTimeout(() => {
+                editorScreen.classList.add('hidden');
+            }, 300); // Tunggu animasi selesai
+        }
+
+        function setTemplate(type) {
+            appState.editor.currentData.type = type;
+
+            // Update Tabs UI
+            ['minimal', 'dailymix', 'collage'].forEach(t => {
+                const tab = document.getElementById(`tab-${t}`);
+                if(t === type) {
+                    tab.classList.replace('text-on-surface-variant', 'text-on-surface');
+                    tab.classList.add('bg-surface-container-high', 'shadow');
+                    tab.classList.remove('hover:text-on-surface');
+                } else {
+                    tab.classList.replace('text-on-surface', 'text-on-surface-variant');
+                    tab.classList.remove('bg-surface-container-high', 'shadow');
+                    tab.classList.add('hover:text-on-surface');
+                }
+                
+                // Toggle sections
+                document.getElementById(`controls-${t}`).classList.toggle('hidden', t !== type);
+                document.getElementById(`controls-${t}`).classList.toggle('flex', t === type);
+            });
+
+            updatePreview();
+        }
+
+        function updatePreview() {
+            const titleInput = document.getElementById('input-title').value;
+            appState.editor.currentData.title = titleInput || 'Tanpa Judul';
+            
+            const previewContainer = document.getElementById('cover-preview-container');
+            previewContainer.innerHTML = generateCoverHTML(appState.editor.currentData, true);
+        }
+
+        // Build Preset UI Buttons
+        function buildEditorPresets() {
+            // Colors
+            const colorContainer = document.getElementById('color-presets');
+            presets.colors.forEach(colorClass => {
+                const btn = document.createElement('button');
+                btn.className = `w-12 h-12 rounded-full shrink-0 ${colorClass} border-2 border-transparent focus:border-white transition-all`;
+                btn.onclick = () => {
+                    appState.editor.currentData.color = colorClass;
+                    updatePreview();
+                };
+                colorContainer.appendChild(btn);
+            });
+
+            // Icons
+            const iconContainer = document.getElementById('icon-presets');
+            presets.icons.forEach(iconClass => {
+                const btn = document.createElement('button');
+                btn.className = `h-12 rounded-md bg-surface-container-high flex items-center justify-center text-on-surface hover:bg-surface-bright transition-colors`;
+                btn.innerHTML = `<i class="ph ${iconClass} text-2xl"></i>`;
+                btn.onclick = () => {
+                    appState.editor.currentData.icon = iconClass;
+                    updatePreview();
+                };
+                iconContainer.appendChild(btn);
+            });
+
+            // Artist Images
+            const artistContainer = document.getElementById('artist-presets');
+            presets.artistImages.forEach(imgUrl => {
+                const btn = document.createElement('button');
+                btn.className = `h-20 rounded-md bg-cover bg-center border-2 border-transparent focus:border-primary transition-all`;
+                btn.style.backgroundImage = `url('${imgUrl}')`;
+                btn.onclick = () => {
+                    appState.editor.currentData.image = imgUrl;
+                    updatePreview();
+                };
+                artistContainer.appendChild(btn);
+            });
+
+            // Demo Collage grid
+            const collageDemo = document.getElementById('collage-demo-grid');
+            presets.collageImages.forEach(imgUrl => {
+                collageDemo.innerHTML += `<div class="bg-cover bg-center w-full h-full" style="background-image: url('${imgUrl}')"></div>`;
+            });
+        }
+
+        function saveCover() {
+            // Update input teks yang mungkin terakhir diketik
+            appState.editor.currentData.title = document.getElementById('input-title').value || 'Playlist Tanpa Judul';
+
+            if (appState.editor.mode === 'new') {
+                const newPlaylist = {
+                    id: 'p_' + Date.now(),
+                    creator: 'Ibnu', // Asumsi nama user
+                    isSystem: false,
+                    cover: JSON.parse(JSON.stringify(appState.editor.currentData))
+                };
+                appState.playlists.unshift(newPlaylist); // Tambah di atas
+            } else {
+                const index = appState.playlists.findIndex(p => p.id === appState.editor.mode);
+                if(index !== -1) {
+                    appState.playlists[index].cover = JSON.parse(JSON.stringify(appState.editor.currentData));
+                }
+            }
+
+            renderLibrary();
+            closeEditor();
+            
+            // Custom toast/notification non-alert
+            showToast('Cover playlist berhasil disimpan!');
+        }
+
+        function editPlaylist(id) {
+            openEditor(id);
+        }
+
+        function showToast(msg) {
+            const toast = document.createElement('div');
+            toast.className = `absolute bottom-24 left-1/2 transform -translate-x-1/2 bg-primary text-on-primary px-4 py-2 rounded-full shadow-lg text-label-sm font-bold z-50 transition-opacity duration-300`;
+            toast.innerText = msg;
+            document.getElementById('app-container').appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        window.onload = () => {
+            buildEditorPresets();
+            renderLibrary();
+            
+            // Inisialisasi ikon Phosphor secara global jika diperlukan render ulang
+            if(window.PhosphorIcons) window.PhosphorIcons.replace();
+        };
+
+    </script>
+</body>
+</html>

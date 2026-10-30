@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:ibnutify/data/datasources/music_local_datasource.dart';
 import 'package:just_audio/just_audio.dart';
@@ -44,7 +43,8 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
   MediaItem? _activeMediaItem;
 
   IbnuTifyAudioHandler() {
-    // Synchronize playbackState (seekbar, controls, play/pause toggle) with audio_service
+    // Synchronize playbackState (seekbar, controls, play/pause toggle) with audio_service [REQ-4.2]
+    _player.playbackEventStream.listen(_broadcastState);
     _player.playerStateStream.listen((playerState) {
       _broadcastState();
       // Non-Stop Playback Engine: Ketika antrean musik selesai (ProcessingState.completed)
@@ -238,6 +238,50 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
       _updateArtworkInBackground(artBytesMap);
     }
   }
+
+  /// [F2-3 FIX] Muat antrian ke player dalam keadaan PAUSED (TIDAK play otomatis).
+  /// Digunakan oleh restoreLastPlayed() agar tidak auto-play saat app dibuka kembali.
+  Future<void> loadQueuePaused(
+    List<MediaItem> items, {
+    int initialIndex = 0,
+    Duration initialPosition = Duration.zero,
+  }) async {
+    _manualQueueCount = 0;
+    _lastIndex = initialIndex;
+
+    if (initialIndex < items.length) {
+      var initialItem = items[initialIndex];
+      final songId = initialItem.extras?['songId'] as int?;
+      if (songId != null && _artworksCache.containsKey(songId)) {
+        initialItem = initialItem.copyWith(artUri: Uri.file(_artworksCache[songId]!));
+      }
+      mediaItem.add(initialItem);
+    }
+    queue.add(items);
+
+    final sources = items.map((item) {
+      return AudioSource.uri(
+        Uri.parse(item.extras!['uri'] as String),
+        tag: item,
+      );
+    }).toList();
+
+    _audioSource = ConcatenatingAudioSource(children: sources);
+
+    await _player.setAudioSource(
+      _audioSource!,
+      initialIndex: initialIndex,
+      initialPosition: initialPosition,
+    );
+
+    _forceEmitFromSources(initialIndex, sources);
+
+    // ── [F2-3 FIX] JANGAN panggil _player.play() ──────────────────────────────
+    // Paksa pause secara eksplisit agar state = paused, bukan playing.
+    await _player.pause();
+    debugPrint('[AudioHandler] loadQueuePaused: queue loaded, player in PAUSED state');
+  }
+
 
   void _updateArtworkInBackground(Map<int, Uint8List> artBytesMap) async {
     try {

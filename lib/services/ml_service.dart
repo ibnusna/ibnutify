@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:ibnutify/data/models/song_model.dart';
 import 'package:ibnutify/data/repositories/music_repository.dart';
@@ -34,7 +35,7 @@ class MLService {
           if (resultString != null) {
             final result = jsonDecode(resultString) as Map<String, dynamic>;
             if (result.containsKey('error')) {
-              print("Error extracting features for ${song.title}: ${result['error']}");
+              debugPrint("[MLService] Error extracting features for ${song.title}: ${result['error']}");
             } else {
               final bpm = (result['bpm'] as num).toDouble();
               final brightness = (result['brightness'] as num).toDouble();
@@ -46,7 +47,7 @@ class MLService {
             }
           }
         } catch (e) {
-          print("Method channel error: $e");
+          debugPrint("[MLService] Method channel error: $e");
         }
       }
     }
@@ -123,7 +124,7 @@ class MLService {
         onProgress?.call("Classification complete!");
       }
     } catch (e) {
-      print("Clustering method channel error: $e");
+      debugPrint("[MLService] Clustering method channel error: $e");
       onProgress?.call("Clustering failed: $e");
     }
   }

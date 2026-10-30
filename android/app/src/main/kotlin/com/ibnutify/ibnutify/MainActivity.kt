@@ -419,6 +419,23 @@ class MainActivity: AudioServiceFragmentActivity() {
                     }
                 }
 
+                "openUrl" -> {
+                    val url = call.argument<String>("url")
+                    if (!url.isNullOrEmpty()) {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("OPEN_URL_ERROR", e.message, null)
+                        }
+                    } else {
+                        result.error("INVALID_ARGUMENT", "url is null", null)
+                    }
+                }
+
                 // ── [F2-4 FIX] Force Close App (Sleep Timer & Curfew) ─────────────────────────
                 // SystemNavigator.pop() tidak reliable di Release Mode — tidak mematikan
                 // background MediaPlayback service. Gunakan finishAndRemoveTask() + exitProcess(0)

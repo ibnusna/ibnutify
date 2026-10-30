@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ibnutify/presentation/providers/app_providers.dart';
 import 'package:ibnutify/data/repositories/lyrics_repository.dart';
@@ -91,8 +92,16 @@ class LyricsNotifier extends Notifier<LyricsState> {
       return;
     }
 
-    // Avoid re-fetching the same song (unless status is idle = initial)
-    if (state.songId == songId && state.status != LyricsStatus.idle) return;
+    // [BUG-3 FIX] Guard diperkuat: skip jika songId sama DAN sudah ada hasil (found/notFound).
+    // Dulu: `state.status != LyricsStatus.idle` — bermasalah karena status bisa kembali ke idle
+    //       saat provider di-build ulang walau lagu sama → memicu re-fetch + API call berulang.
+    if (state.songId == songId &&
+        (state.status == LyricsStatus.found ||
+         state.status == LyricsStatus.notFound ||
+         state.status == LyricsStatus.loading)) {
+      debugPrint('[LyricsNotifier] guard: same songId=$songId status=${state.status.name} — skip re-fetch');
+      return;
+    }
 
     state = LyricsState(status: LyricsStatus.loading, songId: songId);
 

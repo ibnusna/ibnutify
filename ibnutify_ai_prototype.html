@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>IbnuTify AI Companion</title>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        :root {
+            /* Motif/Spotify/Material 3 inspired dark theme */
+            --surface: #0e150e;
+            --surface-container: #1a211a;
+            --surface-container-high: #242c24;
+            --on-surface: #dde5d9;
+            --on-surface-variant: #bccbb9;
+            --primary: #53e076;
+            --on-primary: #003914;
+            --primary-dim: rgba(83, 224, 118, 0.2);
+            --error: #ffb4ab;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-full: 9999px;
+            --glass-bg: rgba(26, 33, 26, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Be Vietnam Pro', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--surface);
+            color: var(--on-surface);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .ambient-bg {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            z-index: 0;
+            pointer-events: none;
+        }
+        .ambient-blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.3;
+            animation: moveBlob 20s infinite alternate ease-in-out;
+        }
+        .blob-1 {
+            width: 300px; height: 300px;
+            background: var(--primary);
+            top: -10%; left: -10%;
+            animation-delay: 0s;
+        }
+        .blob-2 {
+            width: 250px; height: 250px;
+            background: #1db954; /* Spotify deeper green */
+            bottom: 20%; right: -10%;
+            animation-delay: -5s;
+        }
+        @keyframes moveBlob {
+            0% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(10vw, 5vh) scale(1.1); }
+            100% { transform: translate(-5vw, 15vh) scale(0.9); }
+        }
+
+        .ai-header {
+            position: relative;
+            z-index: 50;
+            height: 72px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            background: linear-gradient(to bottom, rgba(14,21,14,0.9) 0%, rgba(14,21,14,0) 100%);
+        }
+        
+        .icon-btn {
+            background: none;
+            border: none;
+            color: var(--on-surface);
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.2s;
+        }
+        .icon-btn:active { opacity: 0.6; }
+
+        .ai-header-title {
+            font-weight: 700;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: 0.5px;
+        }
+        .mood-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--primary);
+            box-shadow: 0 0 10px var(--primary);
+            animation: pulseDot 2s infinite;
+        }
+        @keyframes pulseDot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        /* Sidebar Overlay */
+        .sidebar-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 100;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.3s ease;
+            backdrop-filter: blur(4px);
+        }
+        .sidebar-overlay.active {
+            opacity: 1; pointer-events: auto;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed; top: 0; left: -300px; bottom: 0;
+            width: 300px; max-width: 85vw;
+            background: var(--surface-container-high);
+            z-index: 110;
+            transition: left 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            display: flex; flex-direction: column;
+            padding: 24px 20px;
+            box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+            border-right: 1px solid var(--glass-border);
+        }
+        .sidebar.active { left: 0; }
+        
+        .sidebar-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 24px;
+        }
+        .btn-new-chat {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--glass-border);
+            color: var(--on-surface);
+            width: 100%; padding: 12px;
+            border-radius: var(--radius-md);
+            font-weight: 600; font-size: 14px;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            margin-bottom: 24px; cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-new-chat:active { background: rgba(255,255,255,0.1); }
+        
+        .history-label {
+            font-size: 11px; color: var(--on-surface-variant);
+            font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.05em; margin-bottom: 12px; margin-top: 24px;
+        }
+        .history-item {
+            font-size: 14px; padding: 12px 0;
+            color: var(--on-surface);
+            display: flex; align-items: center; gap: 12px;
+            cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.03);
+            transition: color 0.2s;
+        }
+        .history-item:active { color: var(--primary); }
+        .history-item i { font-size: 18px; color: var(--on-surface-variant); }
+
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 20px 140px 20px; /* Space for input & player */
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            z-index: 10;
+            scroll-behavior: smooth;
+        }
+        .chat-container::-webkit-scrollbar { display: none; }
+
+        /* AI Hero (Initial State) */
+        .ai-hero {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex: 1; /* Take up remaining space vertically */
+            min-height: 50vh;
+            text-align: center;
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+        .ai-hero.hidden {
+            display: none;
+        }
+        
+        .ai-logo-container {
+            width: 80px; height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--surface-container-high), var(--surface-container));
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+            margin-bottom: 24px;
+            animation: heroReveal 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+            opacity: 0; transform: translateY(20px) scale(0.9);
+        }
+        .ai-logo-container i {
+            font-size: 40px;
+            color: var(--primary);
+            animation: floatSparkle 4s ease-in-out infinite, spinEntrance 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+            filter: drop-shadow(0 0 10px var(--primary-dim));
+        }
+        
+        .ai-greeting {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--on-surface);
+            line-height: 1.3;
+            max-width: 280px;
+            opacity: 0;
+            transform: translateY(10px);
+            animation: textReveal 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards 0.6s;
+        }
+
+        @keyframes heroReveal {
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes spinEntrance {
+            0% { transform: rotate(-180deg) scale(0.5); opacity: 0; }
+            100% { transform: rotate(0deg) scale(1); opacity: 1; }
+        }
+        @keyframes floatSparkle {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        @keyframes textReveal {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message-row {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 32px;
+            animation: slideUpFade 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+            opacity: 0; transform: translateY(10px);
+        }
+        @keyframes slideUpFade {
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Gemini style: No bubbles, seamless text */
+        .user-msg {
+            align-self: flex-end;
+            background: var(--surface-container-high);
+            padding: 12px 16px;
+            border-radius: 18px 18px 4px 18px;
+            font-size: 15px;
+            color: var(--on-surface);
+            max-width: 85%;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            border: 1px solid var(--glass-border);
+        }
+        
+        .ai-msg {
+            align-self: flex-start;
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--on-surface);
+            max-width: 95%;
+            padding: 0; /* No bubble padding */
+        }
+        .ai-msg strong { color: #fff; font-weight: 700; }
+
+        /* Status Text (Thinking/Loading) */
+        .status-text {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 14px; font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 12px;
+        }
+        .status-text i {
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* Rich Content Cards */
+        .rich-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            margin-top: 16px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            width: 100%;
+            max-width: 320px;
+        }
+        
+        /* Download Card Details */
+        .dl-card-header { display: flex; gap: 12px; margin-bottom: 16px; }
+        .dl-artwork {
+            width: 56px; height: 56px; border-radius: var(--radius-sm);
+            background: #333; object-fit: cover;
+        }
+        .dl-info { flex: 1; overflow: hidden; }
+        .dl-title { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;}
+        .dl-artist { font-size: 12px; color: var(--on-surface-variant); }
+        
+        .dl-progress-container { margin-bottom: 12px; }
+        .dl-status-row {
+            display: flex; justify-content: space-between;
+            font-size: 11px; margin-bottom: 6px; font-weight: 600;
+            color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .dl-bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
+        .dl-bar-fill { height: 100%; background: var(--primary); width: 0%; border-radius: 3px; transition: width 0.3s linear; }
+        
+        .dl-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--on-surface-variant); }
+        
+        .card-actions { display: flex; gap: 8px; margin-top: 16px; }
+        .btn-card {
+            flex: 1; padding: 10px; border-radius: var(--radius-full);
+            font-size: 13px; font-weight: 700; border: none; cursor: pointer;
+            text-align: center; transition: transform 0.1s, opacity 0.2s;
+        }
+        .btn-card:active { transform: scale(0.95); }
+        .btn-primary { background: var(--primary); color: var(--on-primary); }
+        .btn-secondary { background: rgba(255,255,255,0.1); color: var(--on-surface); border: 1px solid rgba(255,255,255,0.1); }
+
+        .input-area {
+            position: fixed;
+            bottom: 60px; /* Above mini player */
+            left: 0; right: 0;
+            padding: 16px 20px;
+            background: linear-gradient(to top, rgba(14,21,14,1) 60%, rgba(14,21,14,0));
+            z-index: 50;
+        }
+        .input-wrapper {
+            background: var(--surface-container-high);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            display: flex; align-items: center;
+            padding: 6px 6px 6px 20px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+        }
+        .chat-input {
+            flex: 1; background: none; border: none;
+            color: var(--on-surface); font-size: 15px; outline: none;
+        }
+        .chat-input::placeholder { color: var(--on-surface-variant); }
+        .btn-send {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: var(--primary); color: var(--on-primary);
+            border: none; display: flex; align-items: center; justify-content: center;
+            font-size: 20px; cursor: pointer; transition: transform 0.2s, opacity 0.2s;
+        }
+        .btn-send:disabled { background: var(--surface-container-highest); color: var(--on-surface-variant); cursor: default; }
+        .btn-send:not(:disabled):active { transform: scale(0.9); }
+
+        /* Persistent Mini Player */
+        .mini-player {
+            position: fixed; bottom: 0; left: 0; right: 0; height: 60px;
+            background: var(--surface-container); border-top: 1px solid var(--glass-border);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 16px; z-index: 60;
+        }
+        .mp-left { display: flex; align-items: center; gap: 12px; }
+        .mp-artwork { width: 40px; height: 40px; border-radius: 6px; background: #222; object-fit: cover; }
+        .mp-info { display: flex; flex-direction: column; }
+        .mp-title { font-size: 13px; font-weight: 700; color: var(--on-surface); }
+        .mp-artist { font-size: 11px; color: var(--on-surface-variant); }
+        .mp-controls { display: flex; align-items: center; gap: 16px; color: var(--on-surface); font-size: 24px; }
+        .mp-progress { position: absolute; top: 0; left: 0; height: 2px; background: var(--primary); width: 35%; }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <div class="ambient-bg">
+        <div class="ambient-blob blob-1"></div>
+        <div class="ambient-blob blob-2"></div>
+    </div>
+
+    <!-- Sidebar Overlay & Sidebar -->
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <span style="font-weight: 700; font-size: 18px;">Riwayat</span>
+            <button class="icon-btn" onclick="toggleSidebar()"><i class="ph ph-x"></i></button>
+        </div>
+        <button class="btn-new-chat" onclick="startNewChat()">
+            <i class="ph ph-plus"></i> Obrolan Baru
+        </button>
+        
+        <div class="history-label">Hari Ini</div>
+        <div class="history-item" onclick="loadHistory('Workout playlist')">
+            <i class="ph ph-chat-circle"></i> Workout playlist
+        </div>
+        <div class="history-item" onclick="loadHistory('Download my Spotify playlist')">
+            <i class="ph ph-chat-circle"></i> Download Spotify URL
+        </div>
+        
+        <div class="history-label">Kemarin</div>
+        <div class="history-item" onclick="loadHistory('Late night mix')">
+            <i class="ph ph-chat-circle"></i> Late night mix
+        </div>
+        <div class="history-item" onclick="loadHistory('Lagu santai buat kerja')">
+            <i class="ph ph-chat-circle"></i> Lagu santai buat kerja
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="ai-header">
+        <button class="icon-btn" onclick="toggleSidebar()">
+            <i class="ph ph-list"></i>
+        </button>
+        <div class="ai-header-title">
+            <div class="mood-dot"></div> AI Moods
+        </div>
+        <button class="icon-btn" onclick="startNewChat()">
+            <i class="ph ph-note-pencil"></i>
+        </button>
+    </div>
+
+    <!-- Chat Area -->
+    <div class="chat-container" id="chat-container">
+        
+        <!-- Hero Initial View -->
+        <div class="ai-hero" id="ai-hero">
+            <div class="ai-logo-container">
+                <i class="ph-fill ph-sparkle"></i>
+            </div>
+            <div class="ai-greeting" id="ai-greeting"></div>
+        </div>
+
+    </div>
+
+    <!-- Chat Input Area -->
+    <div class="input-area">
+        <div class="input-wrapper">
+            <input type="text" class="chat-input" id="chat-input" placeholder="Tanya sesuatu atau paste link Spotify..." autocomplete="off">
+            <button class="btn-send" id="btn-send" disabled onclick="handleSend()">
+                <i class="ph-fill ph-paper-plane-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Persistent Mini Player -->
+    <div class="mini-player">
+        <div class="mp-progress"></div>
+        <div class="mp-left">
+            <img src="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&q=80&w=100&h=100" alt="Art" class="mp-artwork">
+            <div class="mp-info">
+                <span class="mp-title">Midnight City</span>
+                <span class="mp-artist">M83</span>
+            </div>
+        </div>
+        <div class="mp-controls">
+            <i class="ph-fill ph-speaker-high" style="font-size: 18px; color: var(--on-surface-variant);"></i>
+            <i class="ph-fill ph-heart" style="font-size: 20px; color: var(--primary);"></i>
+            <i class="ph-fill ph-play-circle" style="font-size: 32px;"></i>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const chatInput = document.getElementById('chat-input');
+        const btnSend = document.getElementById('btn-send');
+        const chatContainer = document.getElementById('chat-container');
+        const aiHero = document.getElementById('ai-hero');
+        const aiGreeting = document.getElementById('ai-greeting');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+        // State
+        let isFirstMessage = true;
+
+        // Dynamic Greetings Hook
+        const greetings = [
+            "Apa yang ingin didengarkan hari ini?",
+            "Ada lagu yang ingin di-download?",
+            "Mari buat playlist untuk harimu.",
+            "Ceritakan mood-mu, biar AI yang pilihkan lagu.",
+            "Paste link Spotify, saya yang urus sisanya."
+        ];
+
+        function initGreeting() {
+            const random = greetings[Math.floor(Math.random() * greetings.length)];
+            aiGreeting.innerText = random;
+        }
+
+        // Sidebar Actions
+        function toggleSidebar() {
+            sidebar.classList.toggle('active');
+            sidebarOverlay.classList.toggle('active');
+        }
+
+        function startNewChat() {
+            sidebar.classList.remove('active');
+            sidebarOverlay.classList.remove('active');
+            
+            // Clear Chat
+            const messages = document.querySelectorAll('.message-row');
+            messages.forEach(msg => msg.remove());
+            
+            isFirstMessage = true;
+            chatInput.value = '';
+            btnSend.disabled = true;
+            
+            // Re-animate Hero
+            aiHero.classList.remove('hidden');
+            aiHero.style.animation = 'none';
+            void aiHero.offsetWidth; // Reflow
+            aiHero.style.animation = 'heroReveal 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards';
+            initGreeting();
+        }
+
+        function loadHistory(title) {
+            toggleSidebar();
+            
+            // Clear current chat
+            const messages = document.querySelectorAll('.message-row');
+            messages.forEach(msg => msg.remove());
+            
+            aiHero.classList.add('hidden');
+            isFirstMessage = false;
+            
+            // Simulate restoring conversation
+            appendUserMessage(title);
+            setTimeout(() => {
+                appendAIMessage(`Memulihkan obrolan sebelumnya tentang "<strong>${title}</strong>". Ada yang bisa dibantu lagi?`);
+            }, 500);
+        }
+
+        // Input Listener
+        chatInput.addEventListener('input', () => {
+            btnSend.disabled = chatInput.value.trim().length === 0;
+        });
+
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !btnSend.disabled) {
+                handleSend();
+            }
+        });
+
+        // Intent Router & Chat Logic
+        function handleSend() {
+            const text = chatInput.value.trim();
+            if(!text) return;
+
+            // Hide hero on first message
+            if (isFirstMessage) {
+                aiHero.classList.add('hidden');
+                isFirstMessage = false;
+            }
+
+            appendUserMessage(text);
+            chatInput.value = '';
+            btnSend.disabled = true;
+
+            const lowerText = text.toLowerCase();
+
+            // Simulate Intent Routing based on System Design
+            if (lowerText.includes('spotify.com') || lowerText.includes('download')) {
+                simulateDownloadIntent();
+            } else if (lowerText.includes('playlist') || lowerText.includes('mix')) {
+                simulatePlaylistIntent();
+            } else if (lowerText.includes('putar') || lowerText.includes('play')) {
+                simulatePlayIntent();
+            } else {
+                simulateChatIntent();
+            }
+        }
+
+        function appendUserMessage(text) {
+            const row = document.createElement('div');
+            row.className = 'message-row';
+            row.innerHTML = `<div class="user-msg">${text}</div>`;
+            chatContainer.appendChild(row);
+            scrollToBottom();
+        }
+
+        function appendAIMessage(htmlContent) {
+            const row = document.createElement('div');
+            row.className = 'message-row';
+            row.innerHTML = `<div class="ai-msg">${htmlContent}</div>`;
+            chatContainer.appendChild(row);
+            scrollToBottom();
+            return row; // Return for further manipulation if needed
+        }
+
+        function createStatusIndicator(text, iconClass) {
+            return `
+                <div class="status-text">
+                    <i class="${iconClass}"></i> ${text}
+                </div>
+            `;
+        }
+
+        function scrollToBottom() {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+
+        // 1. Download Intent (Spotify URL detection)
+        function simulateDownloadIntent() {
+            const statusRow = appendAIMessage(createStatusIndicator('Menganalisis tautan & metadata...', 'ph ph-spinner-gap'));
+            
+            setTimeout(() => {
+                statusRow.innerHTML = `<div class="ai-msg">
+                    ${createStatusIndicator('Mempersiapkan unduhan...', 'ph ph-circle-notch')}
+                </div>`;
+                
+                setTimeout(() => {
+                    statusRow.innerHTML = `<div class="ai-msg">
+                        Tautan dikenali. Mengunduh trek dengan kualitas tinggi dan menyematkan metadata album.
+                        
+                        <div class="rich-card" id="active-download">
+                            <div class="dl-card-header">
+                                <img src="https://images.unsplash.com/photo-1493225457124-a1a2a5956093?auto=format&fit=crop&q=80&w=150&h=150" class="dl-artwork">
+                                <div class="dl-info">
+                                    <div class="dl-title">Nightcall (Drive OST)</div>
+                                    <div class="dl-artist">Kavinsky</div>
+                                </div>
+                            </div>
+                            
+                            <div class="dl-progress-container">
+                                <div class="dl-status-row">
+                                    <span id="dl-state-text">DOWNLOADING</span>
+                                    <span id="dl-percent">0%</span>
+                                </div>
+                                <div class="dl-bar-bg">
+                                    <div class="dl-bar-fill" id="dl-bar"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="dl-meta">
+                                <span>3.2 MB / 8.4 MB</span>
+                                <span>↓ 1.2 MB/s</span>
+                            </div>
+                        </div>
+                    </div>`;
+                    scrollToBottom();
+                    runDownloadAnimation();
+                }, 1500);
+            }, 1000);
+        }
+
+        function runDownloadAnimation() {
+            const bar = document.getElementById('dl-bar');
+            const pct = document.getElementById('dl-percent');
+            const state = document.getElementById('dl-state-text');
+            let progress = 0;
+            
+            const interval = setInterval(() => {
+                progress += Math.floor(Math.random() * 15) + 5;
+                if(progress > 95) progress = 100;
+                
+                bar.style.width = progress + '%';
+                pct.innerText = progress + '%';
+                
+                if(progress === 100) {
+                    clearInterval(interval);
+                    state.innerText = 'PROCESSING METADATA';
+                    
+                    setTimeout(() => {
+                        state.innerText = 'COMPLETED';
+                        state.style.color = 'var(--primary)';
+                        document.getElementById('active-download').innerHTML += `
+                            <div class="card-actions">
+                                <button class="btn-card btn-primary"><i class="ph-fill ph-play"></i> Putar</button>
+                            </div>
+                        `;
+                        scrollToBottom();
+                    }, 1500);
+                }
+            }, 400);
+        }
+
+        // 2. Playlist Intent
+        function simulatePlaylistIntent() {
+            const statusRow = appendAIMessage(createStatusIndicator('Menganalisis preferensi dan BPM library...', 'ph ph-spinner-gap'));
+            
+            setTimeout(() => {
+                statusRow.innerHTML = `<div class="ai-msg">
+                    ${createStatusIndicator('Menyusun urutan trek terbaik...', 'ph ph-circle-notch')}
+                </div>`;
+                
+                setTimeout(() => {
+                    statusRow.innerHTML = `<div class="ai-msg">
+                        Playlist telah dibuat berdasarkan mesin AI K-Means lokal. Cocok untuk menemani harimu.
+                        
+                        <div class="rich-card">
+                            <div class="dl-card-header">
+                                <div class="dl-artwork" style="background: linear-gradient(45deg, #1db954, #53e076); display:flex; align-items:center; justify-content:center;">
+                                    <i class="ph-fill ph-lightning" style="font-size: 24px; color: #003914"></i>
+                                </div>
+                                <div class="dl-info">
+                                    <div class="dl-title">AI Energy Mix</div>
+                                    <div class="dl-artist">24 Lagu • 1j 32m</div>
+                                </div>
+                            </div>
+                            <div class="card-actions">
+                                <button class="btn-card btn-primary"><i class="ph-fill ph-play"></i> Putar</button>
+                                <button class="btn-card btn-secondary">Simpan</button>
+                            </div>
+                        </div>
+                    </div>`;
+                    scrollToBottom();
+                }, 1500);
+            }, 1000);
+        }
+
+        // 3. Play Music Intent
+        function simulatePlayIntent() {
+            const statusRow = appendAIMessage(createStatusIndicator('Mencari kecocokan lagu di library...', 'ph ph-magnifying-glass'));
+            
+            setTimeout(() => {
+                statusRow.innerHTML = `<div class="ai-msg">
+                    Memutar trek yang paling sesuai dengan permintaanmu. Menambahkan ke antrean pemutaran...
+                </div>`;
+                
+                // Animate mini player update
+                const mpTitle = document.querySelector('.mp-title');
+                const mpArtist = document.querySelector('.mp-artist');
+                mpTitle.style.color = 'var(--primary)';
+                setTimeout(() => {
+                    mpTitle.innerText = "Lagu Pilihan AI";
+                    mpArtist.innerText = "IbnuTify Local Audio";
+                    mpTitle.style.color = 'var(--on-surface)';
+                }, 300);
+                
+                scrollToBottom();
+            }, 1200);
+        }
+
+        // 4. Normal Chat Intent
+        function simulateChatIntent() {
+            const statusRow = appendAIMessage(createStatusIndicator('Berpikir...', 'ph ph-sparkle'));
+            
+            setTimeout(() => {
+                statusRow.innerHTML = `<div class="ai-msg">
+                    Saya mengerti. Saya dapat membantu mencari lagu, membuat playlist cerdas berdasarkan mood (BPM & Brightness), atau mengunduh musik dari tautan yang Anda berikan. Apa yang ingin kita eksplorasi sekarang?
+                </div>`;
+                scrollToBottom();
+            }, 1200);
+        }
+
+        // Initialize greeting on load
+        window.onload = () => {
+            initGreeting();
+        };
+    </script>
+</body>
+</html>

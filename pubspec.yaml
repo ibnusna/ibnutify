@@ -33,6 +33,7 @@ dependencies:
   marquee: ^2.3.0
   palette_generator: ^0.3.3+4
   percent_indicator: ^4.2.3
+  url_launcher: ^6.3.0
 
   # Permissions
   permission_handler: ^11.3.1
@@ -63,6 +64,7 @@ dependencies:
 
   # BLE Smartwatch Integration
   flutter_blue_plus: ^1.35.5
+  flutter_markdown: ^0.7.7+1
 
 dev_dependencies:
   flutter_test:

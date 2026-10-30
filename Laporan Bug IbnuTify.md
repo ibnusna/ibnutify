@@ -1,11 +1,201 @@
-🐛 Bug ReportBug InformationFieldValueBug IDBUG-CORE-003TitleUI Player Reset Saat Pause, Isu Warna Layar, Map Boros Kuota, & Fitur TimerStatusOpenPriorityCriticalSeverityFatalModuleAudio Player, State Management, UI/UX, Workout MapReported ByProduct Owner / QADate2026-08-29Executive SummaryTerdapat kegagalan fatal pada sinkronisasi State Management pemutar musik: setiap kali pengguna menekan tombol Pause pada lagu yang sedang berjalan (baik mode linear maupun Smart Shuffle), UI layar pemutar dan notifikasi tiba-tiba mereset tampilannya ke lagu pertama. Namun, audio yang ter-pause tetaplah lagu yang benar. Selain itu, diperlukan penyesuaian UI untuk background Player Screen agar lebih cerah (vibrant) tanpa mengganggu background lirik, optimalisasi peta mode olahraga agar tidak boros kuota/menyediakan fallback saat offline, peningkatan Smart Shuffle berbasis database, penerapan fitur Sleep Timer (dan aturan curfew jam 00:00-03:00), serta kepastian bahwa audio engine berjalan Non-Stop di latar belakang.EnvironmentFrontendFramework: FlutterVersion: (Sesuai build terakhir)Browser: N/ADevice: Android / Cross-platformBackendFramework: Dart (Local SQLite) & Python (Chaquopy)Database: SQLite (Local)MobileFramework: FlutterAndroid Version: Android 12+Current BehaviorPause Bug: Memutar lagu ke-3. Klik Pause. UI dan Notifikasi mereset tampilan ke lagu pertama (huruf A atau urutan pertama di queue). Audio tetap berada di lagu ke-3.UI Background Gelap: Latar belakang pemutar musik (berdasarkan album art) disetel terlalu gelap, tidak cerah seperti standar Spotify.Map Boros Kuota: Saat mode olahraga, Live Tracking memuat peta terus-menerus. Jika tidak ada internet, layar peta menjadi kosong.Smart Shuffle Kurang Cerdas: Mode Smart Shuffle belum mempersonalisasi acakan berdasarkan data pemutaran pengguna secara akurat.Tidak Ada Kontrol Waktu: Tidak ada fitur untuk mematikan lagu/aplikasi setelah durasi tertentu atau pada larut malam.Playback Terputus: Musik kadang berhenti sendiri di latar belakang tanpa perintah pengguna.Expected BehaviorKonsistensi Pause: Saat di-pause, UI, Mini Player, dan Notifikasi harus tetap menampilkan data lagu yang sedang di-pause.Vibrant UI Player: Background pemutar musik harus mengambil 2-3 warna dominan dari cover lagu dan memadukannya dengan cerah tanpa terlalu banyak gradasi hitam. (CATATAN PENTING: Background lirik sudah sempurna, JANGAN DIUBAH).Map Offline & Data Saver: Peta hanya diunduh di awal dan akhir untuk menghemat data. Jika offline, tampilkan latar belakang gradien UI, bukan layar kosong.Smart Shuffle Terpersonalisasi: Algoritma harus membaca database listening_history dan perilaku pengguna untuk memutar lagu yang sesuai.Sleep Timer & Curfew: Ada fitur Timer (misal: 30 menit). Selain itu, secara sistem hard-coded: Jika jam 00:00 hingga 03:00, aplikasi tertutup otomatis.Non-Stop Playback: Aplikasi harus memutar musik 24/7 non-stop selama tidak di-pause atau ditutup secara paksa oleh pengguna (atau terkena aturan curfew).Reproduction StepsUntuk Bug Pause:Putar lagu dari halaman utama (bebas biasa atau Smart Shuffle).Lewati beberapa lagu hingga berada di tengah antrean.Klik tombol Pause.Hasil: Layar tiba-tiba berubah ke lagu paling pertama di antrean.Frequency$$x$$ Selalu terjadi$$ $$ Kadang terjadi$$ $$ Sulit direproduksiKeterangan: Terjadi 100% pada fitur Pause di semua layar (Utama, Olahraga, Pencarian).Error Message / Stack Trace(Simulasi log akibat desync stream pada Riverpod)D/AudioHandler: onPause triggered. PlaybackState is paused.
-W/Riverpod: playerProvider rebuild triggered.
-E/State: playerProvider pointer lost, reverting to queue.first (index 0).
+=========================================
+Starting download process for Spotify URL: https://open.spotify.com/track/1NuvCcuRUGN54bkSLk51LC?si=q3MD6LHySQWrkIsyGLAu0A&utm_source=copy-link
+Download directory: /storage/emulated/0/Download/Ibnutify
+Passed FFmpeg path: /data/app/~~MGbv29BEKAbgwKnKnirV8Q==/com.ibnutify.ibnutify-YM2x0sANOmuiZZpHhpoXRQ==/lib/arm64/libffmpeg.so
+Step 1: Scrape Spotify metadata...
+Extracted track ID: 1NuvCcuRUGN54bkSLk51LC
+Spotify metadata scraped successfully:
+  Title: Melompat Lebih Tinggi
+  Artist: Lomba Sihir
+  Album: Unknown Album
+  Year: 2026
+  Cover URL: https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273566dc9e464e2daa1b8b542ec
+Step 2: Scrape iTunes metadata helper...
+  iTunes Genre: Pop
+  iTunes Album: Melompat Lebih Tinggi - Single
+Step 3: Fetch lyrics from LRCLIB...
+  Lyrics found.
+  Synced lyrics (.lrc format) found.
+Target output folder: /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single
+  Created target directory.
+FFmpeg configuration:
+  FFmpeg path: /data/app/~~MGbv29BEKAbgwKnKnirV8Q==/com.ibnutify.ibnutify-YM2x0sANOmuiZZpHhpoXRQ==/lib/arm64/libffmpeg.so
+  FFmpeg exists: True
+  use_ffmpeg: True
+  Expected extension: mp3
+  Target filepath: /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.mp3
+Checking if file already exists in download folder...
+Step 4: Configure yt-dlp options...
+Smart Search: Target duration is 221.0s. Searching top 10 results...
+Smart Search: Found best match https://www.youtube.com/watch?v=wxHpJq5P4BM with duration diff 0.0s.
+Configuring yt-dlp with FFmpeg integration for MP3 audio extraction.
+Step 5: Run yt-dlp YoutubeDL.extract_info (attempt 1/3)
+[WARNING] Deprecated Feature: Support for Python version 3.10 has been deprecated. Please update to Python 3.11 or above
+[ERROR] Deprecated Feature: Support for Python version 3.10 has been deprecated. Please update to Python 3.11 or above
+[DEBUG] [youtube] Extracting URL: https://www.youtube.com/watch?v=wxHpJq5P4BM
+[DEBUG] [youtube] wxHpJq5P4BM: Downloading webpage
+[DEBUG] [youtube] wxHpJq5P4BM: Downloading android player API JSON
+[WARNING] [youtube] wxHpJq5P4BM: Some android client https formats have been skipped as they are missing a URL. YouTube may have enabled the SABR-only streaming experiment for the current session. See  https://github.com/yt-dlp/yt-dlp/issues/12482  for more details
+[DEBUG] [info] wxHpJq5P4BM: Downloading 1 format(s): 18
+[DEBUG] [info] Downloading video thumbnail 41 ...
+[DEBUG] [info] Writing video thumbnail 41 to: /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.webp
+[DEBUG] [download] Destination: /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.mp4
+yt-dlp download finished, starting audio post-processing...
+[DEBUG] [ExtractAudio] Destination: /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.mp3
+[DEBUG] Deleting original file /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.mp4 (pass -k to keep)
+[DEBUG] [ThumbnailsConvertor] Converting thumbnail "/storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.webp" to png
+[ERROR] ERROR: Postprocessing: Decoder (codec webp) not found for input stream #0:0
+[WARNING] yt-dlp attempt 1/3 failed: ERROR: Postprocessing: Decoder (codec webp) not found for input stream #0:0
+Traceback (most recent call last):
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3666, in process_info
+    replace_info_dict(self.post_process(dl_filename, info_dict, files_to_move))
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3852, in post_process
+    info = self.run_all_pps('post_process', info, additional_pps=info.get('__postprocessors'))
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3834, in run_all_pps
+    info = self.run_pp(pp, info)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3812, in run_pp
+    files_to_delete, infodict = pp.run(infodict)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/common.py", line 23, in run
+    ret = func(self, info, *args, **kwargs)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/common.py", line 128, in wrapper
+    return func(self, info)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/embedthumbnail.py", line 84, in run
+    thumbnail_filename = convertor.convert_thumbnail(thumbnail_filename, 'png')
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/ffmpeg.py", line 1098, in convert_thumbnail
+    self.real_run_ffmpeg(
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/ffmpeg.py", line 360, in real_run_ffmpeg
+    raise FFmpegPostProcessorError(stderr.strip().splitlines()[-1])
+yt_dlp.postprocessor.ffmpeg.FFmpegPostProcessorError: Decoder (codec webp) not found for input stream #0:0
 
+During handling of the above exception, another exception occurred:
 
-Fokus utama perbaikan saat ini adalah bagaimana cara lagu diputar. Di sini terdapat kesalahan yang sangat fatal. Kesalahan yang di sini adalah ketika saya memutar lagu, entah itu acak atau tidak, lalu saya mem-pause lagu tersebut, di layar malah merubah lagunya itu ke tampilan lagu yang pertama yang ada di dalam file atau yang terdeteksi dalam file, yaitu misalnya huruf abjad A atau lagu yang pertama kali diputar dalam sebuah antrean. Saya contohkan skenarionya ya. Jika saya memutar lagu dari halaman utama, ketika saya sudah memutar misalnya dua sampai tiga lagu, tetapi lalu saya klik tombol pause, dia malah mengubah tampilan layarnya itu ke lagu yang pertama. Tapi lagu yang diputar itu masih lagu yang saat ini diputar. Contoh skenario lainnya, misal saya memakai mode smart shuffle. Di smart shuffle ini berarti lagunya diacak sesuai personalisasi saya sendiri. Ketika saya misal sudah memutar lagu dari A sampai Z atau saya sedang memutar lagu dari A sampai C. Nah, ketika lagunya sudah sampai di C, lalu saya di tengah-tengah klik tombol pause, halaman yang ada di layar malah kembali ke halaman utama atau ke lagu yang pertama kali diputar di bagian layar dan notifikasinya. Tetapi secara lagu yang diputarnya itu adalah lagu yang dijalankan. Sungguh ini adalah salah satu kesalahan yang sangat fatal dalam segi pemutaran lagu yang di mana menjadi tidak konsisten. Ini terjadi di semua halaman, entah itu ketika saya memutar di halaman olahraga atau ketika saya memutar di halaman utama pencarian dan yang lain sebagainya yang di mana dia selalu mengembalikan lagu ke awal lagu yang diputar. Seperti ketika lagu tanpa smart shuffle dia ke huruf abjad yang paling pertama. Ketika lagu yang dipakai smart shuffle, dia ke lagu yang pertama yang diputar dari smart shuffle. Nah, selain itu juga itu ada masalah di bagian layar atau screen. Untuk screen di sini yang diambil adalah sesuai dengan cover lagu yang di mana sesuai logika Spotify juga dan ini sudah bagus. Yang perlu diperhatikan adalah dari aplikasi yang saat ini itu terlalu gelap modenya yang di mana ketika mode ini sudah terlalu gelap itu tidak sesuai dengan Spotify. Untuk Spotify sendiri ketika dia mengambil bawaan dari lagunya sendiri, dia itu seperti sangat pintar.  Dia bisa mengambil lagu tersebut itu warna dominannya apa, warna eksternalnya apa, lalu dipadukan. Tapi dia tidak terlalu memakai gradasi. Dia tidak 100% bergantung ke sana. Seperti misalnya ada dua sampai tiga warna yaitu merah, hitam, dan putih. Background yang dipadukan adalah antara ketiga warna tersebut, tapi warna-warna yang diambil itu cerah, tidak gelap sebelah saat ini. Nah, untuk yang lirik itu sudah bagus, malah saya sangat suka bagus sekali. Dia pemilihan warna sudah sangat tepat, hanya pemilihan background-nya, pemilihan background musiknya belum. Ingat ya, untuk background lirik itu sudah bagus, tidak perlu diubah. Yang perlu diubah adalah background atau warna yang diambil dari lirik lagunya sendiri. Lalu yang kedua adalah dari mode olahraga. Untuk mode olahraga sendiri di sini sudah perancangan sangat baik dan benar. Yang perlu diubah adalah dari bagian live tracking. Di live tracking ini kan dia sifatnya adalah mendownload tampilan maps dan ini tidak salah, tapi perlu disesuaikan. Jika memang tidak terkoneksi internet atau memang tidak ada internet, maka seperti halaman biasa saja bisa ditambahkan gradien atau apa jadi jangan terlalu kosong. Dan juga untuk live tracking-nya ini saya enggak mau kalau dia mendownload secara terus-menerus. Kalau bisa sih hanya di awal saja atau bisa dibilang hanya di awal dan di akhir sehingga tidak menyedot internet terlalu banyak. Dan yang selanjutnya ada dari metode smart shuffle-nya sendiri. Untuk smart shuffle-nya sendiri, saya minta tolong dengan sangat, tolong baca secara database dan juga perilaku user bagaimana dia memutar musiknya agar personalisasinya itu sendiri lebih sesuai. Dan juga selain itu, Tambahkan mode tidur. Mode tidur di sini maksudnya adalah seperti memakai timer. Misal saya mengatur 30 menit, maka ketika 30 menit, lagu yang sedang diputar itu dimatikan atau kalau bisa aplikasinya tertutup secara otomatis. Dan juga tambahkan jam pasti. Maksudnya ini ketika saya memang tidak mengaktifkan mode ini atau mode tidur ini, tapi ketika sudah terdeteksi jam 12.00, maka aplikasi tertutup secara otomatis sampai jam 3 pagi.
+Traceback (most recent call last):
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/app/downloader.py", line 553, in download_track
+    info = ydl.extract_info(best_youtube_url, download=True)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1720, in extract_info
+    return self.__extract_info(url, self.get_info_extractor(key), download, extra_info, process)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1731, in wrapper
+    return func(self, *args, **kwargs)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1887, in __extract_info
+    return self.process_ie_result(ie_result, download, extra_info)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1946, in process_ie_result
+    ie_result = self.process_video_result(ie_result, download=download)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3134, in process_video_result
+    self.process_info(new_info)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 194, in wrapper
+    return func(self, *args, **kwargs)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3668, in process_info
+    self.report_error(f'Postprocessing: {err}')
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1165, in report_error
+    self.trouble(f'{self._format_err("ERROR:", self.Styles.ERROR)} {message}', *args, **kwargs)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1103, in trouble
+    raise DownloadError(message, exc_info)
+yt_dlp.utils.DownloadError: ERROR: Postprocessing: Decoder (codec webp) not found for input stream #0:0
 
-DAN NOTED PENTING: IBNUTIFY INI HARUS BERJALAN NON STOP! Nonstop di sini maksudnya adalah jadi dari aplikasi ini dia akan terus memutar musik selama user tidak mematikan melalui tombol pause atau menutup aplikasi secara paksa, 
+[Retry] Waiting 2s before next attempt...
+Step 5: Run yt-dlp YoutubeDL.extract_info (attempt 2/3)
+[Retry] Switching player_client order to: ios, android, web
+[WARNING] Deprecated Feature: Support for Python version 3.10 has been deprecated. Please update to Python 3.11 or above
+[ERROR] Deprecated Feature: Support for Python version 3.10 has been deprecated. Please update to Python 3.11 or above
+[DEBUG] [youtube] Extracting URL: https://www.youtube.com/watch?v=wxHpJq5P4BM
+[DEBUG] [youtube] wxHpJq5P4BM: Downloading webpage
+[DEBUG] [youtube] wxHpJq5P4BM: Downloading ios player API JSON
+[DEBUG] [youtube] wxHpJq5P4BM: Downloading android player API JSON
+[WARNING] [youtube] wxHpJq5P4BM: Some ios client https formats have been skipped as they are missing a URL. YouTube may have enabled the SABR-only streaming experiment for the current session. See  https://github.com/yt-dlp/yt-dlp/issues/12482  for more details
+[WARNING] [youtube] wxHpJq5P4BM: Some android client https formats have been skipped as they are missing a URL. YouTube may have enabled the SABR-only streaming experiment for the current session. See  https://github.com/yt-dlp/yt-dlp/issues/12482  for more details
+[DEBUG] [info] wxHpJq5P4BM: Downloading 1 format(s): 18
+[DEBUG] Deleting existing file /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.webp
+[DEBUG] [info] Downloading video thumbnail 41 ...
+[DEBUG] [info] Writing video thumbnail 41 to: /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.webp
+[DEBUG] [download] Destination: /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.mp4
+yt-dlp download finished, starting audio post-processing...
+[DEBUG] [ExtractAudio] Destination: /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.mp3
+[DEBUG] Deleting original file /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.mp4 (pass -k to keep)
+[DEBUG] [ThumbnailsConvertor] Converting thumbnail "/storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.webp" to png
+[ERROR] ERROR: Postprocessing: Decoder (codec webp) not found for input stream #0:0
+[WARNING] yt-dlp attempt 2/3 failed: ERROR: Postprocessing: Decoder (codec webp) not found for input stream #0:0
+Traceback (most recent call last):
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3666, in process_info
+    replace_info_dict(self.post_process(dl_filename, info_dict, files_to_move))
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3852, in post_process
+    info = self.run_all_pps('post_process', info, additional_pps=info.get('__postprocessors'))
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3834, in run_all_pps
+    info = self.run_pp(pp, info)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3812, in run_pp
+    files_to_delete, infodict = pp.run(infodict)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/common.py", line 23, in run
+    ret = func(self, info, *args, **kwargs)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/common.py", line 128, in wrapper
+    return func(self, info)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/embedthumbnail.py", line 84, in run
+    thumbnail_filename = convertor.convert_thumbnail(thumbnail_filename, 'png')
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/ffmpeg.py", line 1098, in convert_thumbnail
+    self.real_run_ffmpeg(
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/ffmpeg.py", line 360, in real_run_ffmpeg
+    raise FFmpegPostProcessorError(stderr.strip().splitlines()[-1])
+yt_dlp.postprocessor.ffmpeg.FFmpegPostProcessorError: Decoder (codec webp) not found for input stream #0:0
 
-ini adalah upfate bug yg banyak terjadi diluar fitnesss juga tolong kamu buat semuanya dengan sangat detail yang akan dimengerti oleh AI agent
+During handling of the above exception, another exception occurred:
 
+Traceback (most recent call last):
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/app/downloader.py", line 553, in download_track
+    info = ydl.extract_info(best_youtube_url, download=True)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1720, in extract_info
+    return self.__extract_info(url, self.get_info_extractor(key), download, extra_info, process)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1731, in wrapper
+    return func(self, *args, **kwargs)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1887, in __extract_info
+    return self.process_ie_result(ie_result, download, extra_info)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1946, in process_ie_result
+    ie_result = self.process_video_result(ie_result, download=download)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3134, in process_video_result
+    self.process_info(new_info)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 194, in wrapper
+    return func(self, *args, **kwargs)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3668, in process_info
+    self.report_error(f'Postprocessing: {err}')
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1165, in report_error
+    self.trouble(f'{self._format_err("ERROR:", self.Styles.ERROR)} {message}', *args, **kwargs)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1103, in trouble
+    raise DownloadError(message, exc_info)
+yt_dlp.utils.DownloadError: ERROR: Postprocessing: Decoder (codec webp) not found for input stream #0:0
+
+[Retry] Waiting 4s before next attempt...
+Step 5: Run yt-dlp YoutubeDL.extract_info (attempt 3/3)
+[Retry] Switching player_client order to: tv_embedded, web
+[WARNING] Deprecated Feature: Support for Python version 3.10 has been deprecated. Please update to Python 3.11 or above
+[ERROR] Deprecated Feature: Support for Python version 3.10 has been deprecated. Please update to Python 3.11 or above
+[DEBUG] [youtube] Extracting URL: https://www.youtube.com/watch?v=wxHpJq5P4BM
+[DEBUG] [youtube] wxHpJq5P4BM: Downloading webpage
+[WARNING] [youtube] Skipping unsupported client "tv_embedded"
+[WARNING] Only images are available for download. use --list-formats to see them
+[ERROR] ERROR: [youtube] wxHpJq5P4BM: Requested format is not available. Use --list-formats for a list of available formats
+[WARNING] yt-dlp attempt 3/3 failed: ERROR: [youtube] wxHpJq5P4BM: Requested format is not available. Use --list-formats for a list of available formats
+Traceback (most recent call last):
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1731, in wrapper
+    return func(self, *args, **kwargs)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1887, in __extract_info
+    return self.process_ie_result(ie_result, download, extra_info)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1946, in process_ie_result
+    ie_result = self.process_video_result(ie_result, download=download)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3096, in process_video_result
+    raise ExtractorError(
+yt_dlp.utils.ExtractorError: [youtube] wxHpJq5P4BM: Requested format is not available. Use --list-formats for a list of available formats
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/app/downloader.py", line 553, in download_track
+    info = ydl.extract_info(best_youtube_url, download=True)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1720, in extract_info
+    return self.__extract_info(url, self.get_info_extractor(key), download, extra_info, process)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1749, in wrapper
+    self.report_error(str(e), e.format_traceback())
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1165, in report_error
+    self.trouble(f'{self._format_err("ERROR:", self.Styles.ERROR)} {message}', *args, **kwargs)
+  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1103, in trouble
+    raise DownloadError(message, exc_info)
+yt_dlp.utils.DownloadError: ERROR: [youtube] wxHpJq5P4BM: Requested format is not available. Use --list-formats for a list of available formats
+
+[ERROR] All 3 yt-dlp attempts failed.
+Download gagal setelah 3 percobaan: ERROR: [youtube] wxHpJq5P4BM: Requested format is not available. Use --list-formats for a list of available formats

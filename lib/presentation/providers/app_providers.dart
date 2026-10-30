@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -18,6 +17,7 @@ import 'package:ibnutify/data/repositories/music_repository.dart';
 import 'package:ibnutify/data/models/song_model.dart';
 import 'package:ibnutify/data/models/playlist_model.dart';
 import 'package:ibnutify/data/models/activity_model.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:ibnutify/services/audio_handler.dart';
 import 'package:ibnutify/services/album_art_service.dart';
 import 'package:ibnutify/services/location_service.dart';
@@ -1543,7 +1543,7 @@ class DownloadNotifier extends Notifier<DownloadState> {
 
   /// User menekan chip "Download Music" — masuk mode menunggu URL.
   void requestUrl() {
-    final botMsg = DownloadChatMessage(
+    const botMsg = DownloadChatMessage(
       content: '**Download Music**\n\n'
           'Oke! Paste link Spotify kamu di sini ya.\n'
           'Format yang didukung:\n'
@@ -1578,7 +1578,7 @@ class DownloadNotifier extends Notifier<DownloadState> {
     }
 
     if (!DownloadService.isSpotifyTrackUrl(input)) {
-      final errMsg = const DownloadChatMessage(
+      const errMsg = DownloadChatMessage(
         content: '**URL tidak valid.**\n\nMasukkan link Spotify track atau playlist yang benar.\n'
             'Contoh track: `https://open.spotify.com/track/6xrP29Jvv...`\n'
             'Contoh playlist: `https://open.spotify.com/playlist/...`',
@@ -1589,7 +1589,7 @@ class DownloadNotifier extends Notifier<DownloadState> {
     }
 
     debugPrint('[DownloadNotifier] Intent: TRACK download');
-    final fetchingMsg = const DownloadChatMessage(
+    const fetchingMsg = DownloadChatMessage(
       content: 'Mencari informasi lagu dari Spotify...',
     );
     state = state.copyWith(
@@ -1615,16 +1615,16 @@ class DownloadNotifier extends Notifier<DownloadState> {
       state = state.copyWith(messages: [...state.messages, previewMsg]);
     } else {
       debugPrint('[DownloadNotifier] Metadata fetch returned null — continuing without preview');
-      final startMsg = DownloadChatMessage(
+      const startMsg = DownloadChatMessage(
         content: 'Memulai unduhan...',
       );
       state = state.copyWith(messages: [...state.messages, startMsg]);
     }
 
-    final progressMsg = DownloadChatMessage(
+    const progressMsg = DownloadChatMessage(
       content: 'Menghubungi YouTube...',
       isProgress: true,
-      progress: const DownloadProgress(),
+      progress: DownloadProgress(),
     );
     final msgs = [...state.messages, progressMsg];
     state = state.copyWith(isDownloading: true, messages: msgs);
@@ -1725,7 +1725,7 @@ class DownloadNotifier extends Notifier<DownloadState> {
     final url = state.lastFailedUrl;
     if (url == null || url.isEmpty) return;
     debugPrint('[DownloadNotifier] Retry download: $url');
-    final retryMsg = DownloadChatMessage(
+    const retryMsg = DownloadChatMessage(
       content: '🔄 Mencoba ulang unduhan...',
     );
     state = state.copyWith(
@@ -1740,7 +1740,7 @@ class DownloadNotifier extends Notifier<DownloadState> {
     debugPrint('[DownloadNotifier] Membatalkan unduhan aktif...');
     await DownloadService.instance.cancelDownload();
     _stopPolling();
-    final cancelMsg = const DownloadChatMessage(
+    const cancelMsg = DownloadChatMessage(
       content: '**Unduhan dibatalkan oleh pengguna.**',
       isSystem: true,
     );
@@ -1756,7 +1756,7 @@ class DownloadNotifier extends Notifier<DownloadState> {
 
   /// Handle download seluruh playlist Spotify.
   Future<void> _handlePlaylistDownload(String url) async {
-    final fetchingMsg = DownloadChatMessage(
+    const fetchingMsg = DownloadChatMessage(
       content: '🎵 Mengambil daftar lagu dari playlist Spotify...\n'
           '_Ini mungkin butuh beberapa detik tergantung jumlah track._',
     );
@@ -1768,10 +1768,10 @@ class DownloadNotifier extends Notifier<DownloadState> {
     final service = DownloadService.instance;
 
     // Tampilkan progress bubble sementara
-    final progressMsg = DownloadChatMessage(
+    const progressMsg = DownloadChatMessage(
       content: 'Membaca informasi playlist...',
       isProgress: true,
-      progress: const DownloadProgress(),
+      progress: DownloadProgress(),
     );
     final msgsWithProgress = [...state.messages, progressMsg];
     state = state.copyWith(isDownloading: true, messages: msgsWithProgress);
@@ -2150,6 +2150,13 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       return false;
     }
 
+    // [REQ-3.3] Minta izin Activity Recognition di runtime untuk sensor pedometer & kalori
+    try {
+      if (await Permission.activityRecognition.isDenied) {
+        await Permission.activityRecognition.request();
+      }
+    } catch (_) {}
+
     final currentPlayerState = ref.read(playerProvider);
     final initialSongsPlayed = (useCurrentQueue && currentPlayerState.currentSong != null) ? 1 : 0;
 
@@ -2187,12 +2194,12 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
 
     // ── 3. Track pergantian lagu via mediaItem stream ─────────────────────
     _songTrackingSub?.cancel();
-    String? _lastTrackedMediaId;
+    String? lastTrackedMediaId;
     _songTrackingSub = ref.read(audioHandlerProvider).mediaItem.listen((item) {
       if (!state.isRunning) return;
       final newId = item?.id;
-      if (newId != null && newId != _lastTrackedMediaId) {
-        _lastTrackedMediaId = newId;
+      if (newId != null && newId != lastTrackedMediaId) {
+        lastTrackedMediaId = newId;
         if (state.songsPlayed > 0) {
           state = state.copyWith(songsPlayed: state.songsPlayed + 1);
         } else {
@@ -2262,7 +2269,7 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
         ForegroundServiceTypes.location,
         ForegroundServiceTypes.health,
       ],
-      notificationTitle: '$sportMode',
+      notificationTitle: sportMode,
       notificationText: '00:00 • 0.00km',
       callback: workoutTaskEntryPoint,
     );
@@ -2274,8 +2281,8 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
     // ── 9. [BUG-5 FIX] Acquire native WakeLock agar GPS tetap jalan saat layar mati ──
     // flutter_foreground_task.allowWakeLock tidak cukup di Samsung OneUI/Xiaomi MIUI.
     try {
-      const _mlChannel = MethodChannel('com.ibnutify.ml/audio');
-      await _mlChannel.invokeMethod('acquireWakeLock');
+      const mlChannel = MethodChannel('com.ibnutify.ml/audio');
+      await mlChannel.invokeMethod('acquireWakeLock');
       debugPrint('[WorkoutNotifier] Native WakeLock acquired');
     } catch (e) {
       debugPrint('[WorkoutNotifier] WakeLock acquire failed (non-fatal): $e');
@@ -2481,8 +2488,8 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
 
     // [BUG-5 FIX] Release native WakeLock saat workout selesai
     try {
-      const _mlChannel = MethodChannel('com.ibnutify.ml/audio');
-      await _mlChannel.invokeMethod('releaseWakeLock');
+      const mlChannel = MethodChannel('com.ibnutify.ml/audio');
+      await mlChannel.invokeMethod('releaseWakeLock');
       debugPrint('[WorkoutNotifier] Native WakeLock released');
     } catch (e) {
       debugPrint('[WorkoutNotifier] WakeLock release failed (non-fatal): $e');

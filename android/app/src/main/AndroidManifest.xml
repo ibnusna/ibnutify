@@ -77,8 +77,9 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-    <!-- Health foreground service type (Android 14+ required for workout apps) -->
+    <!-- Health & Activity Recognition for Workout Tracking -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
 
     <!-- BLE Smartwatch Heart Rate Integration -->
     <!-- Android 12+ (API 31+): granular BLE permissions -->

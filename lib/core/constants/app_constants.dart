@@ -1,6 +1,6 @@
 class AppConstants {
   // Gemini
-  static const String geminiModel = 'gemini-3-flash-preview';
+  static const String geminiModel = 'gemini-2.5-flash';
   static const String geminiBaseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models';
 
@@ -12,7 +12,7 @@ class AppConstants {
     'nvidia/nemotron-3-nano-30b-a3b:free',
     'deepseek/deepseek-r1-0528:free',
     'xiaomi/mimo-v2-flash:free',
-    'mistralai/mistral-7b-instruct:free',
+    'google/gemma-2-9b-it:free',
   ];
 
   // Hive boxes

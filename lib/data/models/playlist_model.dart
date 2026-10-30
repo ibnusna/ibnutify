@@ -6,6 +6,12 @@ class PlaylistModel {
   bool isCustom; // user-created vs auto-playlist
   int createdAt;
 
+  // Cover Generator Template Fields
+  String? coverTemplateType; // 'minimal', 'dailymix', 'collage'
+  String? coverColor; // Hex or gradient preset ID
+  String? coverIcon; // Vector icon key/identifier
+  String? coverTitle; // Custom text overlay for cover
+
   PlaylistModel({
     required this.id,
     required this.name,
@@ -13,6 +19,10 @@ class PlaylistModel {
     required this.songIds,
     required this.isCustom,
     required this.createdAt,
+    this.coverTemplateType,
+    this.coverColor,
+    this.coverIcon,
+    this.coverTitle,
   });
 
   Map<String, dynamic> toMap() {
@@ -22,6 +32,10 @@ class PlaylistModel {
       'description': description,
       'isCustom': isCustom ? 1 : 0,
       'createdAt': createdAt,
+      'coverTemplateType': coverTemplateType,
+      'coverColor': coverColor,
+      'coverIcon': coverIcon,
+      'coverTitle': coverTitle,
     };
   }
 
@@ -33,6 +47,10 @@ class PlaylistModel {
       isCustom: (map['isCustom'] ?? 1) == 1,
       createdAt: map['createdAt'] ?? 0,
       songIds: songIds,
+      coverTemplateType: map['coverTemplateType'] as String?,
+      coverColor: map['coverColor'] as String?,
+      coverIcon: map['coverIcon'] as String?,
+      coverTitle: map['coverTitle'] as String?,
     );
   }
 
@@ -43,6 +61,10 @@ class PlaylistModel {
     List<int>? songIds,
     bool? isCustom,
     int? createdAt,
+    String? coverTemplateType,
+    String? coverColor,
+    String? coverIcon,
+    String? coverTitle,
   }) {
     return PlaylistModel(
       id: id ?? this.id,
@@ -51,6 +73,10 @@ class PlaylistModel {
       songIds: songIds ?? List.from(this.songIds),
       isCustom: isCustom ?? this.isCustom,
       createdAt: createdAt ?? this.createdAt,
+      coverTemplateType: coverTemplateType ?? this.coverTemplateType,
+      coverColor: coverColor ?? this.coverColor,
+      coverIcon: coverIcon ?? this.coverIcon,
+      coverTitle: coverTitle ?? this.coverTitle,
     );
   }
 }

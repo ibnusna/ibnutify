@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../providers/app_providers.dart';
@@ -20,14 +21,60 @@ class MainShell extends ConsumerStatefulWidget {
   ConsumerState<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends ConsumerState<MainShell> {
+class _MainShellState extends ConsumerState<MainShell> with WidgetsBindingObserver {
+  // [F2-5 FIX] MethodChannel untuk menerima callback dari NoisyReceiver (TWS/Bluetooth disconnect)
+  static const _audioChannel = MethodChannel('com.ibnutify.ml/audio');
+
   @override
   void initState() {
     super.initState();
+    // Daftarkan lifecycle observer untuk save/restore player state
+    WidgetsBinding.instance.addObserver(this);
+
+    // [F2-5 FIX] Tangani ACTION_AUDIO_BECOMING_NOISY dari Kotlin NoisyReceiver.
+    // Dipanggil saat TWS/headphone terputus agar musik tidak lanjut lewat speaker.
+    _audioChannel.setMethodCallHandler((call) async {
+      if (call.method == 'onAudioBecomingNoisy') {
+        debugPrint('[MainShell] onAudioBecomingNoisy received — forcing pause');
+        if (mounted) {
+          final playerNotif = ref.read(playerProvider.notifier);
+          await playerNotif.pause();
+        }
+      }
+    });
+
     // Start background auto-downloader for lyrics
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AutoLyricsDownloader.instance.start(ref.read(musicLocalDatasourceProvider));
+
+      // [BUG-6 FIX] Restore last played state setelah frame pertama render.
+      // Delay 800ms agar audio_service + just_audio sudah fully initialized.
+      Future.delayed(const Duration(milliseconds: 800), () {
+        if (mounted) {
+          ref.read(playerProvider.notifier).restoreLastPlayed();
+        }
+      });
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    // [F2-5 FIX] Clear method call handler
+    _audioChannel.setMethodCallHandler(null);
+    super.dispose();
+  }
+
+  /// [BUG-6 FIX] Dipanggil saat app lifecycle berubah.
+  /// paused = app pindah ke background (Home button, switch app)
+  /// detached = app engine terputus (force close atau proses dibunuh OS)
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    super.didChangeAppLifecycleState(lifecycle);
+    if (lifecycle == AppLifecycleState.paused ||
+        lifecycle == AppLifecycleState.detached) {
+      ref.read(playerProvider.notifier).saveLastPlayed();
+    }
   }
 
   @override

@@ -54,14 +54,14 @@ class LocationService {
     try {
       settings = AndroidSettings(
         accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 1, // Update tiap 1 meter
+        distanceFilter: 2, // Update tiap 2 meter [REQ-3.1]
         intervalDuration: const Duration(seconds: 1), // Update tiap 1 detik
         forceLocationManager: false,
       );
     } catch (_) {
       settings = const LocationSettings(
         accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 1,
+        distanceFilter: 2,
       );
     }
     _subscription = Geolocator.getPositionStream(locationSettings: settings)

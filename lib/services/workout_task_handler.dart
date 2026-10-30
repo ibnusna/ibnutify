@@ -149,13 +149,11 @@ class WorkoutTaskHandler extends TaskHandler {
   void _startGps() {
     _gpsSub?.cancel();
     try {
-      // [FIX-BUG-TRK-001-H1] Gunakan AndroidSettings agar Android tahu GPS
-      // diminta dari Foreground Service. intervalDuration 1s memaksa update reguler,
-      // enableWakeLock mencegah CPU sleep saat layar mati (kritis untuk Samsung OneUI).
+      // [REQ-3.1 FIX] Gunakan distanceFilter: 2m agar GPS update presisi
       final settings = defaultTargetPlatform == TargetPlatform.android
           ? AndroidSettings(
-              accuracy: LocationAccuracy.high,
-              distanceFilter: 0,
+              accuracy: LocationAccuracy.bestForNavigation,
+              distanceFilter: 2,
               intervalDuration: const Duration(seconds: 1),
               foregroundNotificationConfig: const ForegroundNotificationConfig(
                 notificationText: 'GPS tracking aktif',
@@ -164,8 +162,8 @@ class WorkoutTaskHandler extends TaskHandler {
               ),
             )
           : const LocationSettings(
-              accuracy: LocationAccuracy.high,
-              distanceFilter: 0,
+              accuracy: LocationAccuracy.bestForNavigation,
+              distanceFilter: 2,
             );
 
       _gpsSub = Geolocator.getPositionStream(
@@ -215,8 +213,8 @@ class WorkoutTaskHandler extends TaskHandler {
         _lastPoint!.lat, _lastPoint!.lng,
         newPoint.lat, newPoint.lng,
       );
-      // Tambah jarak jika > 1.5m (anti-jitter) dan < 500m (anti-teleport)
-      if (rawKm >= 0.0015 && rawKm < 0.5) {
+      // [REQ-3.1 FIX] Tambah jarak jika >= 2 meter (0.002 km) dan < 500m (anti-teleport)
+      if (rawKm >= 0.002 && rawKm < 0.5) {
         _distanceKm += rawKm;
         _lastPoint = newPoint;
         _routePoints.add({'lat': newPoint.lat, 'lng': newPoint.lng});
