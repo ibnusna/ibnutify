@@ -22,6 +22,7 @@ class SongModel {
   String? youtubeUrl;
   int skipCount;
   int completionCount;
+  String? lyrics;
 
   SongModel({
     required this.id,
@@ -45,6 +46,7 @@ class SongModel {
     this.youtubeUrl,
     this.skipCount = 0,
     this.completionCount = 0,
+    this.lyrics,
   });
 
   Map<String, dynamic> toMap() {
@@ -70,6 +72,7 @@ class SongModel {
       'youtube_url': youtubeUrl,
       'skip_count': skipCount,
       'completion_count': completionCount,
+      'lyrics': lyrics,
     };
   }
 
@@ -96,6 +99,7 @@ class SongModel {
       youtubeUrl: map['youtube_url'],
       skipCount: map['skip_count'] ?? 0,
       completionCount: map['completion_count'] ?? 0,
+      lyrics: map['lyrics'],
     );
   }
 
@@ -121,6 +125,7 @@ class SongModel {
     String? youtubeUrl,
     int? skipCount,
     int? completionCount,
+    String? lyrics,
   }) {
     return SongModel(
       id: id ?? this.id,
@@ -144,6 +149,7 @@ class SongModel {
       youtubeUrl: youtubeUrl ?? this.youtubeUrl,
       skipCount: skipCount ?? this.skipCount,
       completionCount: completionCount ?? this.completionCount,
+      lyrics: lyrics ?? this.lyrics,
     );
   }
 

@@ -19,7 +19,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 7,
+      version: 9,
       onCreate: _createDB,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -89,6 +89,21 @@ class DatabaseHelper {
             await db.execute('ALTER TABLE activities ADD COLUMN avg_heart_rate_bpm INTEGER DEFAULT 0');
           } catch (_) {}
         }
+        if (oldVersion < 8) {
+          // Add cover generator template columns to playlists table
+          try {
+            await db.execute('ALTER TABLE playlists ADD COLUMN coverTemplateType TEXT');
+            await db.execute('ALTER TABLE playlists ADD COLUMN coverColor TEXT');
+            await db.execute('ALTER TABLE playlists ADD COLUMN coverIcon TEXT');
+            await db.execute('ALTER TABLE playlists ADD COLUMN coverTitle TEXT');
+          } catch (_) {}
+        }
+        if (oldVersion < 9) {
+          // REQ-2.1: Add lyrics column to songs table for permanent local caching
+          try {
+            await db.execute('ALTER TABLE songs ADD COLUMN lyrics TEXT');
+          } catch (_) {}
+        }
       },
     );
   }
@@ -117,7 +132,8 @@ class DatabaseHelper {
         percussiveness REAL,
         youtube_url TEXT,
         skip_count INTEGER DEFAULT 0,
-        completion_count INTEGER DEFAULT 0
+        completion_count INTEGER DEFAULT 0,
+        lyrics TEXT
       )
     ''');
 
@@ -150,7 +166,11 @@ class DatabaseHelper {
         name TEXT NOT NULL,
         description TEXT,
         isCustom INTEGER DEFAULT 1,
-        createdAt INTEGER NOT NULL
+        createdAt INTEGER NOT NULL,
+        coverTemplateType TEXT,
+        coverColor TEXT,
+        coverIcon TEXT,
+        coverTitle TEXT
       )
     ''');
 

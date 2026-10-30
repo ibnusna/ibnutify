@@ -357,6 +357,30 @@ class _LyricsViewState extends ConsumerState<_LyricsView> {
     _scrollToActive();
   }
 
+  /// [REQ-2.2] Reset flag autoScroll, seek audioHandler ke timestamp baris lirik, dan scroll ke baris tersebut
+  void _jumpToLine(int index, Duration timestamp) {
+    setState(() {
+      _autoScroll = true;
+      _activeIndex = index;
+    });
+    ref.read(audioHandlerProvider).seek(timestamp);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (index >= 0 && index < _lineKeys.length) {
+        final key = _lineKeys[index];
+        final ctx = key.currentContext;
+        if (ctx != null) {
+          Scrollable.ensureVisible(
+            ctx,
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeInOut,
+            alignment: 0.3,
+          );
+        }
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.lyricsState.hasSyncedLyrics) {
@@ -404,20 +428,24 @@ class _LyricsViewState extends ConsumerState<_LyricsView> {
                 itemBuilder: (ctx, i) {
                   if (i == lines.length) return _buildFooter();
                   final isActive = i == _activeIndex;
-                  return Padding(
-                    key: _lineKeys[i],
-                    padding: const EdgeInsets.only(bottom: 10), // match preview spacing
-                    child: AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 300),
-                      style: TextStyle(
-                        color: isActive
-                            ? Colors.white
-                            : Colors.white.withOpacity(0.55),
-                        fontSize: isActive ? 20 : 16,
-                        fontWeight: FontWeight.w700,
-                        height: 1.35,
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _jumpToLine(i, lines[i].timestamp),
+                    child: Padding(
+                      key: _lineKeys[i],
+                      padding: const EdgeInsets.only(bottom: 10), // match preview spacing
+                      child: AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 300),
+                        style: TextStyle(
+                          color: isActive
+                              ? Colors.white
+                              : Colors.white.withOpacity(0.55),
+                          fontSize: isActive ? 20 : 16,
+                          fontWeight: FontWeight.w700,
+                          height: 1.35,
+                        ),
+                        child: Text(lines[i].text),
                       ),
-                      child: Text(lines[i].text),
                     ),
                   );
                 },
@@ -453,9 +481,9 @@ class _LyricsViewState extends ConsumerState<_LyricsView> {
                           ),
                         ],
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
+                        children: [
                           Icon(
                             Icons.graphic_eq_rounded,
                             color: Colors.black,

@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:ibnutify/data/datasources/database_helper.dart';
 import 'package:ibnutify/data/models/lyrics_cache_model.dart';
@@ -25,9 +27,10 @@ class LyricsRepository {
     required String fileUri,
     required String title,
     required String artist,
-  }) {
+  }) async {
     // Deduplicate: if already fetching for this song, reuse the future
-    if (_inFlight.containsKey(songId)) return _inFlight[songId]!;
+    if (_inFlight.containsKey(songId)) return await _inFlight[songId]!;
+    
     final future = _resolve(
       songId: songId,
       fileUri: fileUri,
@@ -35,9 +38,12 @@ class LyricsRepository {
       artist: artist,
     );
     _inFlight[songId] = future;
-    future.then((_) => _inFlight.remove(songId))
-        .catchError((_) => _inFlight.remove(songId));
-    return future;
+    
+    try {
+      return await future;
+    } finally {
+      _inFlight.remove(songId);
+    }
   }
 
   Future<LyricsResult?> _resolve({
@@ -46,7 +52,40 @@ class LyricsRepository {
     required String title,
     required String artist,
   }) async {
-    // ── Step 1: Embedded MP3 lyrics ─────────────────────────────────────────
+    // ── Step 1: SQLite Cache (songs table & lyrics_cache) [REQ-2.1] ──────────
+    try {
+      final db = await DatabaseHelper.instance.database;
+      // 1a. Kueri dari tabel songs: SELECT lyrics FROM songs WHERE uri = ?
+      final songRows = await db.query(
+        'songs',
+        columns: ['lyrics'],
+        where: 'uri = ? OR id = ?',
+        whereArgs: [fileUri, songId],
+      );
+      if (songRows.isNotEmpty) {
+        final songLyrics = songRows.first['lyrics'] as String?;
+        if (songLyrics != null && songLyrics.trim().isNotEmpty) {
+          final lower = songLyrics.toLowerCase();
+          final isGarbage = lower.contains('lirik tidak ditemukan') ||
+              lower.contains('lyrics not found') ||
+              lower.contains('no lyrics') ||
+              lower == 'not found';
+          if (!isGarbage) {
+            debugPrint('DEBUG [LyricsRepo]: Cache HIT from songs table for $fileUri');
+            return LyricsResult(
+              lyrics: songLyrics,
+              source: LyricsSource.embeddedCached,
+            );
+          }
+        }
+      }
+
+      // 1b. Kueri dari tabel lyrics_cache
+      final cached = await _readFromCache(songId);
+      if (cached != null) return cached;
+    } catch (_) {}
+
+    // ── Step 2: Embedded MP3 / Sidecar .lrc ──────────────────────────────────
     try {
       final embedded = await LyricsService.instance.getLyrics(songId, fileUri);
       if (embedded != null && embedded.isNotEmpty) {
@@ -57,6 +96,17 @@ class LyricsRepository {
                           lower == 'not found';
                           
         if (!isGarbage) {
+          // Sync ke songs table untuk pemanggilan berikutnya
+          try {
+            final db = await DatabaseHelper.instance.database;
+            await db.update(
+              'songs',
+              {'lyrics': embedded},
+              where: 'id = ? OR uri = ?',
+              whereArgs: [songId, fileUri],
+            );
+          } catch (_) {}
+
           return LyricsResult(
             lyrics: embedded,
             source: LyricsSource.embedded,
@@ -65,23 +115,14 @@ class LyricsRepository {
       }
     } catch (_) {}
 
-    // ── Step 2: SQLite permanent cache ─────────────────────────────────────────
-    try {
-      final cached = await _readFromCache(songId);
-      if (cached != null) return cached;
-    } catch (_) {}
-
-    // ── Step 3: lrclib.net API ───────────────────────────────────────────────
-    // We do NOT wrap this in a try-catch that swallows errors.
-    // If fetchWithFallback throws, it will propagate up to LyricsNotifier 
-    // so we can display the debug trace.
+    // ── Step 3: lrclib.net API (Hanya satu kali saat online) ─────────────────
     final apiLyrics = await LyricsApiService.instance.fetchWithFallback(
       title: title,
       artist: artist,
     );
 
     if (apiLyrics != null && apiLyrics.isNotEmpty) {
-      // ── Step 4: Persist to Hive ─────────────────────────────────────────
+      // ── Step 4: Persist to SQLite (lyrics_cache + songs) & .lrc file ────────
       await _saveToCache(
         songId: songId,
         title: title,
@@ -89,6 +130,30 @@ class LyricsRepository {
         lyrics: apiLyrics,
         source: 'lrclib',
       );
+
+      try {
+        final db = await DatabaseHelper.instance.database;
+        await db.update(
+          'songs',
+          {'lyrics': apiLyrics},
+          where: 'id = ? OR uri = ?',
+          whereArgs: [songId, fileUri],
+        );
+      } catch (_) {}
+
+      // Simpan ke berkas .lrc lokal jika file path valid
+      try {
+        String? localPath = fileUri;
+        if (localPath.startsWith('file://')) {
+          localPath = Uri.parse(localPath).toFilePath();
+        }
+        if (localPath.contains('/')) {
+          final lrcPath = localPath.replaceAll(RegExp(r'\.[a-zA-Z0-9]+$'), '.lrc');
+          final lrcFile = File(lrcPath);
+          await lrcFile.writeAsString(apiLyrics);
+          debugPrint('DEBUG [LyricsRepo]: Saved sidecar .lrc file at $lrcPath');
+        }
+      } catch (_) {}
 
       return LyricsResult(
         lyrics: apiLyrics,
@@ -123,12 +188,12 @@ class LyricsRepository {
       );
 
       if (maps.isEmpty) {
-        print('DEBUG [LyricsRepo]: Cache MISS for songId $songId');
+        debugPrint('DEBUG [LyricsRepo]: Cache MISS for songId $songId');
         return null;
       }
       final entry = LyricsCacheModel.fromMap(maps.first);
       if (entry.lyrics.isEmpty) {
-        print('DEBUG [LyricsRepo]: Cache HIT but empty for songId $songId');
+        debugPrint('DEBUG [LyricsRepo]: Cache HIT but empty for songId $songId');
         return null;
       }
 
@@ -139,11 +204,11 @@ class LyricsRepository {
                         lower == 'not found';
                         
       if (isGarbage) {
-        print('DEBUG [LyricsRepo]: Cache HIT but garbage for songId $songId');
+        debugPrint('DEBUG [LyricsRepo]: Cache HIT but garbage for songId $songId');
         return null; // Ignore garbage
       }
 
-      print('DEBUG [LyricsRepo]: Cache HIT for songId $songId (Source: ${entry.source})');
+      debugPrint('DEBUG [LyricsRepo]: Cache HIT for songId $songId (Source: ${entry.source})');
       return LyricsResult(
         lyrics: entry.lyrics,
         source: entry.source == 'lrclib'
@@ -151,7 +216,7 @@ class LyricsRepository {
             : LyricsSource.embeddedCached,
       );
     } catch (e) {
-      print('DEBUG [LyricsRepo]: Cache ERROR: $e');
+      debugPrint('DEBUG [LyricsRepo]: Cache ERROR: $e');
       return null;
     }
   }
