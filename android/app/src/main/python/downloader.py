@@ -21,6 +21,7 @@ import urllib.parse
 # ─── Module-level progress state (thread-safe via lock) ─────────────────────
 
 _progress_lock = threading.Lock()
+_cancel_event = threading.Event()
 _download_progress = {
     "status": "idle",          # idle | fetching_metadata | downloading | converting | tagging | done | error | skipped
     "percent": 0.0,
@@ -32,7 +33,15 @@ _download_progress = {
     "error": "",
     "total_songs": 1,
     "current_song_index": 1,
+    "cover_url": "",           # [F2-2 FIX] URL cover art dari Spotify, untuk ditampilkan di UI saat download
 }
+
+def cancel_download():
+    """Menghentikan unduhan aktif sesegera mungkin via cancellation token."""
+    _cancel_event.set()
+    _set_progress(status='error', error='Unduhan dibatalkan oleh pengguna.')
+    _add_debug_log("[Downloader Py] cancel_download dipanggil.")
+    return json.dumps({"success": True, "status": "cancelled"})
 
 _debug_lock = threading.Lock()
 _debug_logs = []
@@ -147,7 +156,37 @@ def _scrape_track_metadata(spotify_url):
                     'duration_ms': entity.get('duration', 0),
                 }
             else:
-                _add_debug_log("[WARNING] __NEXT_DATA__ not found in response text on attempt {}".format(attempt + 1))
+                _add_debug_log("[WARNING] __NEXT_DATA__ not found on attempt {}. Trying <title> fallback...".format(attempt + 1))
+                # BUG-1 FIX: Fallback parse dari tag <title> (format: "Song - Artist | Spotify")
+                title_tag_match = re.search(r'<title>(.+?)\s*[|\u2013\-]\s*(.+?)\s*(?:[|\u2013].*)?\.?\s*</title>', response.text)
+                og_title_match = re.search(r'<meta property="og:title" content="([^"]+)"', response.text)
+                og_artist_match = re.search(r'<meta name="music:musician_description" content="([^"]+)"', response.text)
+                og_image_match = re.search(r'<meta property="og:image" content="([^"]+)"', response.text)
+                
+                fallback_title = 'Unknown Title'
+                fallback_artist = 'Unknown Artist'
+                
+                if og_title_match:
+                    fallback_title = html.unescape(og_title_match.group(1))
+                elif title_tag_match:
+                    fallback_title = html.unescape(title_tag_match.group(1).strip())
+                    fallback_artist = html.unescape(title_tag_match.group(2).strip())
+                
+                if og_artist_match:
+                    fallback_artist = html.unescape(og_artist_match.group(1))
+                
+                fallback_cover = og_image_match.group(1) if og_image_match else None
+                
+                if fallback_title != 'Unknown Title':
+                    _add_debug_log("[INFO] Fallback parse succeeded: '{}' by '{}'".format(fallback_title, fallback_artist))
+                    return {
+                        'title': fallback_title,
+                        'artist': fallback_artist,
+                        'album': 'Unknown Album',
+                        'cover_url': fallback_cover,
+                        'year': '',
+                        'duration_ms': 0,
+                    }
         except Exception as e:
             _add_debug_log("[WARNING] Exception during scrape attempt {}: {}".format(attempt + 1, str(e)))
             if attempt < 2:
@@ -301,6 +340,7 @@ def download_track(spotify_url, download_dir, ffmpeg_path=''):
     Return JSON: {success, status, title, artist, album, file_path, error}
     """
     global _debug_logs
+    _cancel_event.clear()
     with _debug_lock:
         _debug_logs = []
 
@@ -412,7 +452,16 @@ def download_track(spotify_url, download_dir, ffmpeg_path=''):
             break
 
     if file_exists:
-        _add_debug_log("File already exists at: {}. Skipping download.".format(final_filepath))
+        _add_debug_log("File already exists at: {}. Checking metadata...".format(final_filepath))
+        # [FIX-B] File mungkin ada dari percobaan sebelumnya yang crash sebelum tagging.
+        # Jalankan ulang _add_mp3_metadata() untuk memastikan metadata ada.
+        _set_progress(status='tagging', percent=99.0, file_path=final_filepath)
+        try:
+            if final_filepath.endswith('.mp3'):
+                _add_mp3_metadata(final_filepath, track_info, None)
+                _add_debug_log("  Re-tagged existing file with Spotify metadata.")
+        except Exception as retag_err:
+            _add_debug_log("[WARNING] Re-tagging existing file failed: {}".format(retag_err))
         _set_progress(status='skipped', percent=100.0, file_path=final_filepath)
         return json.dumps({
             'success': True,
@@ -428,8 +477,14 @@ def download_track(spotify_url, download_dir, ffmpeg_path=''):
     _add_debug_log("Step 4: Configure yt-dlp options...")
     _set_progress(status='downloading', percent=0.0)
 
+    # [F2-2 FIX] Set cover_url dari metadata Spotify agar UI dapat menampilkan
+    # cover art secara real-time selama proses download berjalan.
+    _set_progress(cover_url=track_info.get('cover_url', '') or '')
+
     def _progress_hook(d):
         """Hook dipanggil yt-dlp setiap kali ada update progress."""
+        if _cancel_event.is_set():
+            raise RuntimeError("DOWNLOAD_CANCELLED")
         status = d.get('status', '')
         if status == 'downloading':
             total = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
@@ -450,6 +505,11 @@ def download_track(spotify_url, download_dir, ffmpeg_path=''):
     target_duration = track_info.get('lrclib_duration') or (track_info.get('duration_ms', 0) / 1000.0)
     best_youtube_url = _smart_search_youtube(track_info['artist'], track_info['title'], target_duration)
 
+    # ── [F2-1 FIX] Atomic Download: yt-dlp menulis ke .tmp dulu ──────────────
+    # Gunakan prefix _tmp_ di outtmpl agar file mentah tidak tertukar dengan
+    # file selesai. Rename ke nama final HANYA jika seluruh proses sukses 100%.
+    tmp_output_path = output_path + '_tmp_'
+
     ydl_opts = {
         'default_search': 'ytsearch1',
         'noplaylist': True,
@@ -457,7 +517,7 @@ def download_track(spotify_url, download_dir, ffmpeg_path=''):
         'no_warnings': False,
         'logger': YtdlpLogger(),
         'progress_hooks': [_progress_hook],
-        'outtmpl': output_path + '.%(ext)s',
+        'outtmpl': tmp_output_path + '.%(ext)s',  # tulis ke tmp
         # Retry & timeout settings untuk Android/koneksi lambat
         'retries': 10,
         'fragment_retries': 10,
@@ -475,14 +535,20 @@ def download_track(spotify_url, download_dir, ffmpeg_path=''):
         # MP3 dengan loudnorm (Option A — ffmpeg tersedia via libffmpeg.so)
         _add_debug_log("Configuring yt-dlp with FFmpeg integration for MP3 audio extraction.")
         ydl_opts['format'] = 'bestaudio/best'
-        ydl_opts['postprocessors'] = [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '320',
-        }]
-        ydl_opts['postprocessor_args'] = [
-            '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11,bass=g=4,treble=g=3'
+        # [FIX-A] HAPUS EmbedThumbnail dan writethumbnail.
+        # EmbedThumbnail crash karena libffmpeg.so di APK tidak punya WebP decoder.
+        # Cover art ditangani oleh _add_mp3_metadata() via mutagen + Spotify CDN URL.
+        ydl_opts['postprocessors'] = [
+            {
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '320',
+            },
+            # EmbedThumbnail DIHAPUS — crash: "Decoder (codec webp) not found"
         ]
+        ydl_opts['postprocessor_args'] = {
+            'ffmpegextractaudio': ['-af', 'loudnorm=I=-16:TP=-1.5:LRA=11,bass=g=4,treble=g=3'],
+        }
         ydl_opts['ffmpeg_location'] = ffmpeg_path
     else:
         # Tanpa ffmpeg — paksa ambil format m4a (aac)
@@ -490,41 +556,57 @@ def download_track(spotify_url, download_dir, ffmpeg_path=''):
         ydl_opts['format'] = 'bestaudio[ext=m4a]/bestaudio/best'
         final_filepath = output_path  # path tanpa ext, akan dicari nanti
 
+
     youtube_url = None
 
-    try:
-        _add_debug_log("Step 5: Run yt-dlp YoutubeDL.extract_info...")
-        import yt_dlp
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(best_youtube_url, download=True)
-            if info and 'entries' in info and len(info['entries']) > 0:
-                youtube_url = info['entries'][0].get('webpage_url')
-            elif info:
-                youtube_url = info.get('webpage_url')
-        
-        _add_debug_log("yt-dlp extract_info succeeded. YouTube URL: {}".format(youtube_url))
+    # BUG-2 FIX: Retry loop 3x dengan exponential backoff untuk yt-dlp
+    _max_retries = 3
+    _last_error = None
+    _ytdlp_success = False
 
-        # Cari file hasil download — scan folder karena ext bisa webm/opus/m4a/mp3
-        _add_debug_log("Scanning target folder for downloaded file...")
-        found = None
-        for f in os.listdir(target_folder):
-            name_no_ext = os.path.splitext(f)[0]
-            if name_no_ext == clean_title:
-                found = os.path.join(target_folder, f)
-                break
+    for _attempt in range(_max_retries):
+        if _cancel_event.is_set():
+            _last_error = RuntimeError("DOWNLOAD_CANCELLED")
+            break
+        try:
+            _add_debug_log("Step 5: Run yt-dlp YoutubeDL.extract_info (attempt {}/{})".format(_attempt + 1, _max_retries))
+            import yt_dlp
 
-        if found:
-            final_filepath = found
-            _add_debug_log("Found downloaded file: {}".format(final_filepath))
-        elif not os.path.exists(final_filepath):
-            raise RuntimeError('File output tidak ditemukan setelah download di folder: {}'.format(target_folder))
+            # Pada retry, coba ganti player_client order untuk avoid bot-detect
+            # [FIX-C] tv_embedded tidak didukung yt-dlp dan menyebabkan "format not available".
+            # Gunakan kombinasi client yang lebih aman.
+            if _attempt == 1:
+                ydl_opts['extractor_args'] = {'youtube': {'player_client': ['ios', 'web']}}
+                _add_debug_log("[Retry] Switching player_client order to: ios, web")
+            elif _attempt == 2:
+                ydl_opts['extractor_args'] = {'youtube': {'player_client': ['mweb', 'android']}}
+                _add_debug_log("[Retry] Switching player_client order to: mweb, android")
 
-    except Exception as e:
-        import traceback
-        tb = traceback.format_exc()
-        err = 'Download gagal: {}\nTraceback:\n{}'.format(str(e), tb)
-        _add_debug_log("[ERROR] Exception occurred during download:\n" + err)
-        _set_progress(status='error', error=str(e))
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(best_youtube_url, download=True)
+                if info and 'entries' in info and len(info['entries']) > 0:
+                    youtube_url = info['entries'][0].get('webpage_url')
+                elif info:
+                    youtube_url = info.get('webpage_url')
+            
+            _add_debug_log("yt-dlp extract_info succeeded on attempt {}. YouTube URL: {}".format(_attempt + 1, youtube_url))
+            _ytdlp_success = True
+            break
+
+        except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            _last_error = e
+            _add_debug_log("[WARNING] yt-dlp attempt {}/{} failed: {}\n{}".format(_attempt + 1, _max_retries, str(e), tb))
+            if _attempt < _max_retries - 1:
+                wait_s = 2 ** (_attempt + 1)  # 2s, 4s, 8s
+                _add_debug_log("[Retry] Waiting {}s before next attempt...".format(wait_s))
+                time.sleep(wait_s)
+
+    if not _ytdlp_success:
+        err = 'Download gagal setelah {} percobaan: {}'.format(_max_retries, str(_last_error))
+        _add_debug_log("[ERROR] All {} yt-dlp attempts failed.\n{}".format(_max_retries, err))
+        _set_progress(status='error', error=str(_last_error))
         return json.dumps({
             'success': False,
             'status': 'error',
@@ -532,24 +614,73 @@ def download_track(spotify_url, download_dir, ffmpeg_path=''):
             'artist': track_info.get('artist', ''),
             'album': track_info.get('album', ''),
             'file_path': '',
-            'error': str(e),
+            'error': err,
         })
 
-    # ── 7. Tambahkan metadata ─────────────────────────────────────────────────
-    _add_debug_log("Step 6: Writing metadata tags (mutagen)...")
-    _set_progress(status='tagging', percent=99.5)
     try:
-        if final_filepath.endswith('.mp3'):
+        # [REQ-1.1 FIX] Cari file .tmp yang dihasilkan yt-dlp/FFmpeg di target_folder
+        _add_debug_log("Scanning target folder for tmp downloaded file...")
+        tmp_found = None
+        for f in os.listdir(target_folder):
+            if f.startswith(clean_title + '_tmp_'):
+                tmp_found = os.path.join(target_folder, f)
+                break
+
+        if not tmp_found or not os.path.exists(tmp_found):
+            raise RuntimeError('File output tidak ditemukan setelah download di folder: {}'.format(target_folder))
+
+        _add_debug_log("Found tmp file: {}".format(tmp_found))
+
+        if _cancel_event.is_set():
+            raise RuntimeError("DOWNLOAD_CANCELLED")
+
+        # ── Step 6: Writing metadata tags (mutagen) directly to tmp file ───────
+        _add_debug_log("Step 6: Writing metadata tags to temporary file...")
+        _set_progress(status='tagging', percent=99.5)
+        if tmp_found.endswith('.mp3'):
             _add_debug_log("  Writing MP3 ID3 metadata...")
-            _add_mp3_metadata(final_filepath, track_info, youtube_url)
+            _add_mp3_metadata(tmp_found, track_info, youtube_url)
         else:
             # Untuk format non-MP3 (webm/opus/m4a) — tambah tag via mutagen
             _add_debug_log("  Writing generic (M4A/MP4) metadata...")
-            _add_generic_metadata(final_filepath, track_info, youtube_url)
+            _add_generic_metadata(tmp_found, track_info, youtube_url)
         _add_debug_log("  Metadata writing finished successfully.")
-    except Exception as tag_err:
-        _add_debug_log("[WARNING] Metadata tagging failed: {}".format(tag_err))
 
+        if _cancel_event.is_set():
+            raise RuntimeError("DOWNLOAD_CANCELLED")
+
+        # ── Step 7: [REQ-1.1 FIX] Atomic rename ONLY after 100% success ────────
+        if os.path.exists(final_filepath):
+            os.remove(final_filepath)
+        os.rename(tmp_found, final_filepath)
+        _add_debug_log("Atomic rename completed: {} -> {}".format(tmp_found, final_filepath))
+
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        is_cancelled = (str(e) == "DOWNLOAD_CANCELLED" or _cancel_event.is_set())
+        err = 'Unduhan dibatalkan oleh pengguna.' if is_cancelled else 'File scan/tagging/rename gagal: {}\nTraceback:\n{}'.format(str(e), tb)
+        _add_debug_log("[ERROR] " + err)
+        # [REQ-1.1 FIX] Bersihkan sisa file .tmp agar tidak mencemari folder
+        try:
+            for f in os.listdir(target_folder):
+                if f.startswith(clean_title + '_tmp_'):
+                    os.remove(os.path.join(target_folder, f))
+                    _add_debug_log("Cleaned up tmp file: {}".format(f))
+        except Exception:
+            pass
+        _set_progress(status='error', error=err)
+        return json.dumps({
+            'success': False,
+            'status': 'error',
+            'title': track_info.get('title', ''),
+            'artist': track_info.get('artist', ''),
+            'album': track_info.get('album', ''),
+            'file_path': '',
+            'error': err,
+        })
+
+    # ── 7. Selesai ────────────────────────────────────────────────────────────
     _add_debug_log("Download track completed successfully!")
     _add_debug_log("Final file path: {}".format(final_filepath))
     _add_debug_log("=========================================")
@@ -626,9 +757,11 @@ def _add_mp3_metadata(filepath, track_info, youtube_url):
                 pass
 
         audio.save()
-    except Exception:
-        # Metadata gagal tidak boleh hentikan proses utama
-        pass
+        _add_debug_log("  MP3 metadata saved successfully.")
+    except Exception as e:
+        import traceback
+        _add_debug_log("[ERROR] _add_mp3_metadata failed: {}\n{}".format(e, traceback.format_exc()))
+        # Metadata gagal tidak boleh hentikan proses utama, tapi harus tercatat
 
 
 def _add_generic_metadata(filepath, track_info, youtube_url):
@@ -776,6 +909,7 @@ def download_playlist(spotify_url, download_dir, ffmpeg_path=''):
     Return JSON: {success, playlist_name, total, successful, failed: [title, ...], error}
     """
     global _debug_logs
+    _cancel_event.clear()
     with _debug_lock:
         _debug_logs = []
 
@@ -870,6 +1004,7 @@ def download_playlist(spotify_url, download_dir, ffmpeg_path=''):
             percent=0.0,
             current_title=track_info.get('title', ''),
             current_artist=track_info.get('artist', ''),
+            cover_url=track_info.get('cover_url', '') or '',
             total_songs=total,
             current_song_index=idx + 1,
             error='',
@@ -921,13 +1056,22 @@ def download_playlist(spotify_url, download_dir, ffmpeg_path=''):
             successful += 1
             continue
 
-        # Build yt-dlp options
-        _set_progress(status='downloading', percent=0.0)
+        # Build yt-dlp options (Atomic pattern: tulis ke _tmp_ dulu)
+        _set_progress(
+            status='downloading',
+            percent=0.0,
+            cover_url=track_info.get('cover_url', '') or '',
+            current_title=track_info.get('title', ''),
+            current_artist=track_info.get('artist', ''),
+        )
+        tmp_output_path = output_path + '_tmp_'
         
         target_duration = track_info.get('lrclib_duration') or (track_info.get('duration_ms', 0) / 1000.0)
         best_youtube_url = _smart_search_youtube(track_info['artist'], track_info['title'], target_duration)
 
         def _progress_hook(d, _fp=final_filepath):
+            if _cancel_event.is_set():
+                raise RuntimeError("DOWNLOAD_CANCELLED")
             status = d.get('status', '')
             if status == 'downloading':
                 total_b = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
@@ -951,7 +1095,7 @@ def download_playlist(spotify_url, download_dir, ffmpeg_path=''):
             'no_warnings': False,
             'logger': YtdlpLogger(),
             'progress_hooks': [_progress_hook],
-            'outtmpl': output_path + '.%(ext)s',
+            'outtmpl': tmp_output_path + '.%(ext)s',  # [F2-1 FIX] atomic tmp
             'retries': 10,
             'fragment_retries': 10,
             'socket_timeout': 60,
@@ -964,19 +1108,22 @@ def download_playlist(spotify_url, download_dir, ffmpeg_path=''):
 
         if use_ffmpeg:
             ydl_opts['format'] = 'bestaudio/best'
-            ydl_opts['postprocessors'] = [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '320',
-            }]
-            ydl_opts['postprocessor_args'] = [
-                '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11,bass=g=4,treble=g=3'
+            # [FIX-A] EmbedThumbnail DIHAPUS — crash karena libffmpeg.so tidak punya WebP decoder.
+            # Cover art dihandle _add_mp3_metadata() via Spotify CDN URL (mutagen).
+            ydl_opts['postprocessors'] = [
+                {'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '320'},
+                # EmbedThumbnail DIHAPUS
             ]
+            ydl_opts['postprocessor_args'] = {
+                'ffmpegextractaudio': ['-af', 'loudnorm=I=-16:TP=-1.5:LRA=11,bass=g=4,treble=g=3'],
+            }
             ydl_opts['ffmpeg_location'] = ffmpeg_path
         else:
             ydl_opts['format'] = 'bestaudio[ext=m4a]/bestaudio/best'
 
         try:
+            if _cancel_event.is_set():
+                raise RuntimeError("DOWNLOAD_CANCELLED")
             import yt_dlp
             youtube_url = None
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -986,25 +1133,34 @@ def download_playlist(spotify_url, download_dir, ffmpeg_path=''):
                 elif info:
                     youtube_url = info.get('webpage_url')
 
-            # Cari file hasil download
-            found = None
+            # [REQ-1.1 FIX] Cari file .tmp, tag tmp dulu, lalu atomic rename
+            tmp_found = None
             for f in os.listdir(playlist_folder):
-                name_no_ext = os.path.splitext(f)[0]
-                if name_no_ext == clean_title:
-                    found = os.path.join(playlist_folder, f)
+                if f.startswith(clean_title + '_tmp_'):
+                    tmp_found = os.path.join(playlist_folder, f)
                     break
 
-            if found:
-                final_filepath = found
-            elif not os.path.exists(final_filepath):
+            if not tmp_found or not os.path.exists(tmp_found):
                 raise RuntimeError('File output tidak ditemukan setelah download.')
 
-            # Tambah metadata
+            if _cancel_event.is_set():
+                raise RuntimeError("DOWNLOAD_CANCELLED")
+
+            # Tambah metadata ke file .tmp
             _set_progress(status='tagging', percent=99.5)
-            if final_filepath.endswith('.mp3'):
-                _add_mp3_metadata(final_filepath, track_info, youtube_url)
+            if tmp_found.endswith('.mp3'):
+                _add_mp3_metadata(tmp_found, track_info, youtube_url)
             else:
-                _add_generic_metadata(final_filepath, track_info, youtube_url)
+                _add_generic_metadata(tmp_found, track_info, youtube_url)
+
+            if _cancel_event.is_set():
+                raise RuntimeError("DOWNLOAD_CANCELLED")
+
+            # Atomic rename HANYA jika download dan metadata tagging selesai 100%
+            if os.path.exists(final_filepath):
+                os.remove(final_filepath)
+            os.rename(tmp_found, final_filepath)
+            _add_debug_log("  Atomic rename: {} -> {}".format(tmp_found, final_filepath))
 
             _set_progress(
                 status='done',
@@ -1020,7 +1176,17 @@ def download_playlist(spotify_url, download_dir, ffmpeg_path=''):
             import traceback
             tb = traceback.format_exc()
             _add_debug_log("[ERROR] Failed track '{}': {}\n{}".format(track_info['title'], e, tb))
+            # [REQ-1.1 FIX] Cleanup tmp file on failure
+            try:
+                for f in os.listdir(playlist_folder):
+                    if f.startswith(clean_title + '_tmp_'):
+                        os.remove(os.path.join(playlist_folder, f))
+            except Exception:
+                pass
             failed.append(track_info.get('title', 'Unknown'))
+            if _cancel_event.is_set():
+                _add_debug_log("Playlist download cancelled by user in track loop.")
+                break
 
         # Jeda antar track
         if idx < total - 1:

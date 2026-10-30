@@ -76,6 +76,21 @@ class MusicRepository {
 
   Future<void> deletePlaylist(String playlistId) => _local.deletePlaylist(playlistId);
 
+  Future<void> updatePlaylistCover(
+    String playlistId, {
+    String? coverTemplateType,
+    String? coverColor,
+    String? coverIcon,
+    String? coverTitle,
+  }) =>
+      _local.updatePlaylistCover(
+        playlistId,
+        coverTemplateType: coverTemplateType,
+        coverColor: coverColor,
+        coverIcon: coverIcon,
+        coverTitle: coverTitle,
+      );
+
   Future<List<SongModel>> getSongsForPlaylist(PlaylistModel playlist) =>
       _local.getSongsForPlaylist(playlist);
 
@@ -87,15 +102,16 @@ class MusicRepository {
   Future<void> updateSongFeatures(int id, double bpm, double brightness, double percussiveness, int? releaseYear) =>
       _local.updateSongFeatures(id, bpm, brightness, percussiveness, releaseYear);
 
-  /// Update metadata yang bisa diedit user: artist, album, youtube_url.
+  /// Update metadata yang bisa diedit user: artist, album, youtube_url, album_art_path.
   Future<void> updateSongMetadata(
     int songId, {
     String? artist,
     String? album,
     String? youtubeUrl,
+    String? albumArtPath,
   }) =>
       _local.updateSongMetadata(songId,
-          artist: artist, album: album, youtubeUrl: youtubeUrl);
+          artist: artist, album: album, youtubeUrl: youtubeUrl, albumArtPath: albumArtPath);
 
   Future<void> updateSongClustersAndEra(Map<int, int> clusters, Map<int, int> eras) =>
       _local.updateSongClustersAndEra(clusters, eras);

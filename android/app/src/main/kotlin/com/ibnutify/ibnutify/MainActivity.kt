@@ -1,11 +1,16 @@
 package com.ibnutify.ibnutify
 
+import android.content.BroadcastReceiver
 import android.content.ContentUris
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.MediaStore
 import com.ryanheise.audioservice.AudioServiceFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -13,10 +18,58 @@ import io.flutter.plugin.common.MethodChannel
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import kotlin.concurrent.thread
+import kotlin.system.exitProcess
 
 class MainActivity: AudioServiceFragmentActivity() {
     private val CHANNEL = "com.ibnutify.ml/audio"
 
+    // [BUG-5 FIX] Explicit PARTIAL_WAKE_LOCK untuk Workout GPS background tracking.
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    // [F2-4 FIX] MethodChannel reference untuk closeAppDeeper
+    private var methodChannel: MethodChannel? = null
+
+    // ─── [F2-5 FIX] BroadcastReceiver untuk ACTION_AUDIO_BECOMING_NOISY ────────────
+    // Dipanggil Android saat perangkat audio nirkabel (TWS/headphone) terputus.
+    // Tanpa ini, AudioPlayer melanjutkan pemutaran lewat speaker secara otomatis.
+    private var noisyReceiverRegistered = false
+    private val noisyReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                android.util.Log.d("IbnuTify", "[F2-5] ACTION_AUDIO_BECOMING_NOISY fired — forcing pause")
+                // Kirim command pause ke Dart via MethodChannel agar PlayerNotifier.state sinkron
+                Handler(Looper.getMainLooper()).post {
+                    methodChannel?.invokeMethod("onAudioBecomingNoisy", null)
+                }
+            }
+        }
+    }
+
+    private fun registerNoisyReceiver() {
+        if (noisyReceiverRegistered) return
+        val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        registerReceiver(noisyReceiver, filter)
+        noisyReceiverRegistered = true
+        android.util.Log.d("IbnuTify", "[F2-5] NoisyReceiver registered")
+    }
+
+    private fun unregisterNoisyReceiver() {
+        if (!noisyReceiverRegistered) return
+        try { unregisterReceiver(noisyReceiver) } catch (_: Exception) {}
+        noisyReceiverRegistered = false
+        android.util.Log.d("IbnuTify", "[F2-5] NoisyReceiver unregistered")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        registerNoisyReceiver()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Tetap registered saat di background agar TWS disconnect terdeteksi saat app background
+        // JANGAN unregister di sini — cukup unregister di onDestroy
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -27,7 +80,10 @@ class MainActivity: AudioServiceFragmentActivity() {
             }
         }
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+        // [F2-4+F2-5 FIX] Store channel reference for NoisyReceiver → Dart callbacks
+        val mc = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+        methodChannel = mc
+        mc.setMethodCallHandler { call, result ->
             when (call.method) {
                 "extractFeatures" -> {
                     val filePath = call.argument<String>("filePath")
@@ -198,6 +254,25 @@ class MainActivity: AudioServiceFragmentActivity() {
                     }
                 }
 
+                "cancelDownload" -> {
+                    thread {
+                        try {
+                            if (Python.isStarted()) {
+                                val py = Python.getInstance()
+                                val downloaderModule = py.getModule("downloader")
+                                downloaderModule.callAttr("cancel_download")
+                            }
+                            Handler(Looper.getMainLooper()).post {
+                                result.success(true)
+                            }
+                        } catch (e: Exception) {
+                            Handler(Looper.getMainLooper()).post {
+                                result.error("CANCEL_ERROR", e.message, null)
+                            }
+                        }
+                    }
+                }
+
                 "getDownloadLog" -> {
                     try {
                         while (!Python.isStarted()) { Thread.sleep(50) }
@@ -312,9 +387,84 @@ class MainActivity: AudioServiceFragmentActivity() {
                     }
                 }
 
+                // ── Workout WakeLock ─────────────────────────────────────────────────────────
+                // [BUG-5 FIX] Dipanggil dari WorkoutNotifier.startWorkout() via MethodChannel
+                "acquireWakeLock" -> {
+                    try {
+                        if (wakeLock == null || wakeLock?.isHeld == false) {
+                            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                            wakeLock = pm.newWakeLock(
+                                PowerManager.PARTIAL_WAKE_LOCK,
+                                "IbnuTify::WorkoutWakeLock"
+                            ).apply {
+                                // Timeout 4 jam maksimum untuk safety (tidak bisa terlupa release)
+                                acquire(4 * 60 * 60 * 1000L)
+                            }
+                        }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("WAKELOCK_ERROR", e.message, null)
+                    }
+                }
+
+                "releaseWakeLock" -> {
+                    try {
+                        if (wakeLock?.isHeld == true) {
+                            wakeLock?.release()
+                        }
+                        wakeLock = null
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("WAKELOCK_ERROR", e.message, null)
+                    }
+                }
+
+                // ── [F2-4 FIX] Force Close App (Sleep Timer & Curfew) ─────────────────────────
+                // SystemNavigator.pop() tidak reliable di Release Mode — tidak mematikan
+                // background MediaPlayback service. Gunakan finishAndRemoveTask() + exitProcess(0)
+                // untuk memastikan app dan semua service benar-benar mati.
+                "closeAppDeeper" -> {
+                    try {
+                        // 1. Stop audio playback dulu
+                        try {
+                            val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                            am.abandonAudioFocus(null)
+                        } catch (_: Exception) {}
+
+                        // 2. Finish dan hapus dari Recents task
+                        finishAndRemoveTask()
+
+                        // 3. Kill proses secara paksa (300ms delay agar finishAndRemoveTask() sempat dieksekusi)
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            exitProcess(0)
+                        }, 300)
+
+                        result.success(true)
+                    } catch (e: Exception) {
+                        // Fallback: paksa exit langsung
+                        result.success(true)
+                        exitProcess(0)
+                    }
+                }
+
                 else -> result.notImplemented()
 
             }
         }
+    }
+
+    override fun onDestroy() {
+        // Pastikan WakeLock dilepas saat Activity dihancurkan
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+                wakeLock = null
+            }
+        } catch (_: Exception) {}
+
+        // [F2-5 FIX] Unregister NoisyReceiver
+        unregisterNoisyReceiver()
+
+        super.onDestroy()
     }
 }

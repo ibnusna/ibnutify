@@ -495,6 +495,32 @@ class MusicLocalDatasource {
     await db.delete('playlists', where: 'id = ?', whereArgs: [playlistId]);
   }
 
+  /// Update cover template metadata for a playlist
+  Future<void> updatePlaylistCover(
+    String playlistId, {
+    String? coverTemplateType,
+    String? coverColor,
+    String? coverIcon,
+    String? coverTitle,
+  }) async {
+    final db = await _db;
+    final data = <String, dynamic>{};
+    if (coverTemplateType != null) data['coverTemplateType'] = coverTemplateType;
+    if (coverColor != null) data['coverColor'] = coverColor;
+    if (coverIcon != null) data['coverIcon'] = coverIcon;
+    if (coverTitle != null) data['coverTitle'] = coverTitle;
+
+    if (data.isNotEmpty) {
+      final updatedRows = await db.update('playlists', data, where: 'id = ?', whereArgs: [playlistId]);
+      if (updatedRows == 0) {
+        data['id'] = playlistId;
+        data['name'] = coverTitle ?? playlistId;
+        data['song_ids'] = '';
+        await db.insert('playlists', data, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    }
+  }
+
   Future<List<SongModel>> getSongsForPlaylist(PlaylistModel playlist) async {
     final db = await _db;
     if (playlist.songIds.isEmpty) return [];
@@ -545,6 +571,7 @@ class MusicLocalDatasource {
     String? artist,
     String? album,
     String? youtubeUrl,
+    String? albumArtPath,
   }) async {
     final db = await _db;
     final maps = await db.query('songs', where: 'id = ?', whereArgs: [songId]);
@@ -554,6 +581,7 @@ class MusicLocalDatasource {
       artist: artist ?? song.artist,
       album: album ?? song.album,
       youtubeUrl: youtubeUrl ?? song.youtubeUrl,
+      albumArtPath: albumArtPath ?? song.albumArtPath,
     );
     await db.update('songs', updated.toMap(), where: 'id = ?', whereArgs: [songId]);
   }

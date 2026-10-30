@@ -8,10 +8,13 @@
 //
 // Tidak ada AI terlibat; semua operasi adalah sistem murni.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+
 
 /// Status download yang bisa dipantau.
 enum DownloadStatus {
@@ -50,6 +53,8 @@ class DownloadProgress {
   final String error;
   final int totalSongs;
   final int currentSongIndex;
+  /// [F2-2 FIX] URL cover art dari Spotify — tampilkan di UI saat download berjalan
+  final String coverUrl;
 
   const DownloadProgress({
     this.status = DownloadStatus.idle,
@@ -62,6 +67,7 @@ class DownloadProgress {
     this.error = '',
     this.totalSongs = 1,
     this.currentSongIndex = 1,
+    this.coverUrl = '',
   });
 
   factory DownloadProgress.fromJson(Map<String, dynamic> json) {
@@ -76,10 +82,11 @@ class DownloadProgress {
       error: json['error'] as String? ?? '',
       totalSongs: (json['total_songs'] as num? ?? 1).toInt(),
       currentSongIndex: (json['current_song_index'] as num? ?? 1).toInt(),
+      coverUrl: json['cover_url'] as String? ?? '',
     );
   }
 
-  /// Tampilan ETA yang user-friendly untuk ditampilkan di chat.
+  /// Tampilan sisa waktu yang user-friendly untuk ditampilkan di chat.
   String get etaDisplay {
     if (etaSeconds <= 0) return '';
     if (etaSeconds < 60) return '${etaSeconds}s';
@@ -208,7 +215,35 @@ class DownloadService {
   static final DownloadService _instance = DownloadService._();
   static DownloadService get instance => _instance;
 
-  DownloadService._();
+  final _progressStreamController = StreamController<DownloadProgress>.broadcast();
+
+  /// Stream progress real-time untuk komponen UI [REQ-1.2]
+  Stream<DownloadProgress> get progressStream => _progressStreamController.stream;
+
+  DownloadService._() {
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'onDownloadProgress') {
+        try {
+          final raw = call.arguments as String?;
+          if (raw != null) {
+            final json = jsonDecode(raw) as Map<String, dynamic>;
+            _progressStreamController.add(DownloadProgress.fromJson(json));
+          }
+        } catch (_) {}
+      }
+    });
+  }
+
+  /// Batalkan download aktif sesegera mungkin [REQ-1.3]
+  Future<bool> cancelDownload() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('cancelDownload');
+      return res ?? false;
+    } catch (e) {
+      debugPrint('[DownloadService] cancelDownload failed: $e');
+      return false;
+    }
+  }
 
   /// Kembalikan path absolut ke folder Download/Ibnutify di storage publik.
   /// Di Android, ini adalah /storage/emulated/0/Download/Ibnutify
@@ -261,8 +296,15 @@ class DownloadService {
       final json = jsonDecode(raw) as Map<String, dynamic>;
       return DownloadResult.fromJson(json);
     } on PlatformException catch (e) {
-      return DownloadResult.failure(e.message ?? 'Platform error tidak diketahui.');
+      debugPrint('[DownloadService] PlatformException in downloadTrack:');
+      debugPrint('  code: ${e.code}');
+      debugPrint('  message: ${e.message}');
+      debugPrint('  details: ${e.details}');
+      final detail = e.details != null ? '\nDetail: ${e.details}' : '';
+      return DownloadResult.failure(
+          '[${e.code}] ${e.message ?? 'Platform error tidak diketahui.'}$detail');
     } catch (e) {
+      debugPrint('[DownloadService] Unexpected error in downloadTrack: $e');
       return DownloadResult.failure('Error: $e');
     }
   }
@@ -273,7 +315,9 @@ class DownloadService {
       final raw = await _channel.invokeMethod<String>('getDownloadProgress');
       if (raw == null) return const DownloadProgress();
       final json = jsonDecode(raw) as Map<String, dynamic>;
-      return DownloadProgress.fromJson(json);
+      final progress = DownloadProgress.fromJson(json);
+      _progressStreamController.add(progress);
+      return progress;
     } catch (_) {
       return const DownloadProgress();
     }
@@ -320,10 +364,12 @@ class DownloadService {
         input.contains('spotify:track:');
   }
 
-  /// Validasi apakah string adalah Spotify playlist URL yang valid.
+  /// Validasi apakah string adalah Spotify playlist/album URL yang valid.
   static bool isSpotifyPlaylistUrl(String input) {
     return input.contains('open.spotify.com/playlist/') ||
-        input.contains('spotify:playlist:');
+        input.contains('spotify:playlist:') ||
+        input.contains('open.spotify.com/album/') ||
+        input.contains('spotify:album:');
   }
 
   /// Validasi apakah string adalah Spotify track atau playlist URL.
