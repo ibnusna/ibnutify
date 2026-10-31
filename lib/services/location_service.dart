@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 /// Service untuk GPS tracking offline — digunakan oleh WorkoutNotifier.
@@ -53,19 +54,21 @@ class LocationService {
     late final LocationSettings settings;
     try {
       settings = AndroidSettings(
-        accuracy: LocationAccuracy.bestForNavigation,
+        accuracy: LocationAccuracy.high, // Gunakan high agar Fused Location aktif seketika
         distanceFilter: 2, // Update tiap 2 meter [REQ-3.1]
         intervalDuration: const Duration(seconds: 1), // Update tiap 1 detik
         forceLocationManager: false,
       );
     } catch (_) {
       settings = const LocationSettings(
-        accuracy: LocationAccuracy.bestForNavigation,
+        accuracy: LocationAccuracy.high,
         distanceFilter: 2,
       );
     }
     _subscription = Geolocator.getPositionStream(locationSettings: settings)
-        .listen(onPosition);
+        .listen(onPosition, onError: (err) {
+          debugPrint('[LocationService] GPS Stream Error: $err');
+        });
     return _subscription!;
   }
 

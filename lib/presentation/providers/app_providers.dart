@@ -2105,6 +2105,9 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
   // Local 1-second fallback timer di main isolate untuk menjamin UI timer selalu berjalan
   Timer? _localTimer;
 
+  // Stream GPS di main isolate untuk tracking foreground real-time
+  StreamSubscription<Position>? _mainLocationSub;
+
   // Callback yang terdaftar untuk menerima data dari task isolate
   DataCallback? _taskDataCallback;
 
@@ -2208,28 +2211,31 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       }
     });
 
-    // ── 4. Ambil posisi awal untuk seed task isolate ───────────────────────
+    // ── 4. Ambil posisi awal secara instan (lastKnown) tanpa blocking UI ──
     double? initLat, initLng;
     try {
-      final initialPos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 5),
-        ),
-      );
-      initLat = initialPos.latitude;
-      initLng = initialPos.longitude;
-      if (state.isRunning) {
-        final initPoint = LatLngPoint(initLat, initLng);
-        _routePoints.add(initPoint);
-        _lastKnownPoint = initPoint;
-        state = state.copyWith(
-          currentSpeedMs: initialPos.speed < 0 ? 0.0 : initialPos.speed,
-          gpsAccuracy: initialPos.accuracy,
-          routePoints: [initPoint],
-        );
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null) {
+        initLat = lastKnown.latitude;
+        initLng = lastKnown.longitude;
+        if (state.isRunning) {
+          final initPoint = LatLngPoint(initLat, initLng);
+          _routePoints.add(initPoint);
+          _lastKnownPoint = initPoint;
+          state = state.copyWith(
+            currentSpeedMs: lastKnown.speed < 0 ? 0.0 : lastKnown.speed,
+            gpsAccuracy: lastKnown.accuracy,
+            routePoints: [initPoint],
+          );
+        }
       }
     } catch (_) {}
+
+    // ── 4b. Mulai continuous GPS tracking stream langsung di main isolate ──
+    _mainLocationSub?.cancel();
+    _mainLocationSub = LocationService.instance.startTracking(
+      onPosition: _onMainGpsPosition,
+    );
 
     // ── 5. Simpan initial data ke storage untuk task isolate baca ─────────
     await FlutterForegroundTask.saveData(key: 'sportMode', value: sportMode);
@@ -2322,6 +2328,61 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
     });
   }
 
+  /// Handler posisi GPS dari main isolate (foreground streaming langsung)
+  void _onMainGpsPosition(Position pos) {
+    if (!state.isRunning || state.isPaused) return;
+
+    final accuracy = pos.accuracy;
+    final speedMs = pos.speed < 0 ? 0.0 : pos.speed;
+
+    // Abaikan posisi dengan akurasi sangat buruk (> 100 meter)
+    if (accuracy > 100.0) {
+      state = state.copyWith(
+        currentSpeedMs: speedMs,
+        gpsAccuracy: accuracy,
+      );
+      return;
+    }
+
+    final newPoint = LatLngPoint(pos.latitude, pos.longitude);
+    double newDist = state.distanceKm;
+
+    if (_lastKnownPoint != null) {
+      final dKm = LocationService.haversineDistance(
+        _lastKnownPoint!.lat,
+        _lastKnownPoint!.lng,
+        newPoint.lat,
+        newPoint.lng,
+      );
+      // Valid step/movement: minimal 2 meter (0.002 km) dan maksimal 500 meter (anti-teleport)
+      if (dKm >= 0.002 && dKm < 0.5) {
+        newDist += dKm;
+        _lastKnownPoint = newPoint;
+        _routePoints.add(newPoint);
+      }
+    } else {
+      _lastKnownPoint = newPoint;
+      _routePoints.add(newPoint);
+    }
+
+    state = state.copyWith(
+      distanceKm: newDist,
+      currentSpeedMs: speedMs,
+      gpsAccuracy: accuracy,
+      routePoints: List.unmodifiable(_routePoints),
+    );
+
+    // Forward koordinat ke task isolate agar background isolate & notifikasi tetap sinkron
+    FlutterForegroundTask.sendDataToTask({
+      'cmd': 'mainGpsPosition',
+      'lat': pos.latitude,
+      'lng': pos.longitude,
+      'speed': speedMs,
+      'accuracy': accuracy,
+      'altitude': pos.altitude,
+    });
+  }
+
   /// Callback dipanggil setiap detik oleh task isolate via FlutterForegroundTask
   void _onTaskData(Object data) {
     if (data is! Map) return;
@@ -2347,14 +2408,14 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
     final currentAltM = (data['currentAltitudeM'] as num?)?.toDouble() ?? state.currentAltitudeM;
     final calories = (data['estimatedCalories'] as num?)?.toDouble() ?? state.estimatedCalories;
 
-    // Sync route points dari task isolate ke main isolate
+    // Sync route points dari task isolate ke main isolate jika task isolate memiliki titik baru
     if (lastLat != null && lastLng != null) {
       final newPoint = LatLngPoint(lastLat, lastLng);
       if (_lastKnownPoint == null ||
           _lastKnownPoint!.lat != newPoint.lat ||
           _lastKnownPoint!.lng != newPoint.lng) {
-        _lastKnownPoint = newPoint;
         if (_routePoints.length < routeLength) {
+          _lastKnownPoint = newPoint;
           _routePoints.add(newPoint);
         }
       }
@@ -2384,14 +2445,15 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
       return;
     }
 
-    // Update state UI setiap detik (gunakan nilai elapsedSecs terbesar dari task isolate atau local timer)
+    // Update state UI setiap detik (gunakan nilai elapsedSecs dan distanceKm terbesar dari task isolate atau local state)
     final syncedElapsedSecs = math.max(elapsedSecs, state.elapsedSeconds);
+    final syncedDist = math.max(distKm, state.distanceKm);
 
     state = state.copyWith(
       elapsedSeconds: syncedElapsedSecs,
-      distanceKm: distKm,
-      currentSpeedMs: speedMs,
-      gpsAccuracy: accuracy,
+      distanceKm: syncedDist,
+      currentSpeedMs: speedMs > 0 ? speedMs : state.currentSpeedMs,
+      gpsAccuracy: accuracy > 0 ? accuracy : state.gpsAccuracy,
       isPaused: isPaused,
       routePoints: List.unmodifiable(_routePoints),
       stepCount: stepCount,
@@ -2427,9 +2489,12 @@ class WorkoutNotifier extends Notifier<WorkoutState> {
   }
 
   Future<WorkoutState> stopWorkout() async {
-    // Stop local timer
+    // Stop local timer & GPS tracking di main isolate
     _localTimer?.cancel();
     _localTimer = null;
+    await _mainLocationSub?.cancel();
+    _mainLocationSub = null;
+    await LocationService.instance.stopTracking();
 
     // Ambil snapshot state saat ini sebelum di-reset
     final currentState = state;

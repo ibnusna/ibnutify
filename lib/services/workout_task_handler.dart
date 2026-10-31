@@ -146,6 +146,33 @@ class WorkoutTaskHandler extends TaskHandler {
         final bpm = data['bpm'];
         if (bpm is int) _heartRateBpm = bpm;
         break;
+      case 'syncDistance':
+        final dist = (data['distanceKm'] as num?)?.toDouble();
+        if (dist != null && dist > _distanceKm) {
+          _distanceKm = dist;
+        }
+        break;
+      case 'mainGpsPosition':
+        final lat = (data['lat'] as num?)?.toDouble();
+        final lng = (data['lng'] as num?)?.toDouble();
+        final speed = (data['speed'] as num?)?.toDouble() ?? 0.0;
+        final accuracy = (data['accuracy'] as num?)?.toDouble() ?? 0.0;
+        final altitude = (data['altitude'] as num?)?.toDouble() ?? 0.0;
+        if (lat != null && lng != null) {
+          _onPosition(Position(
+            latitude: lat,
+            longitude: lng,
+            timestamp: DateTime.now(),
+            accuracy: accuracy,
+            altitude: altitude,
+            altitudeAccuracy: 0.0,
+            heading: 0.0,
+            headingAccuracy: 0.0,
+            speed: speed,
+            speedAccuracy: 0.0,
+          ));
+        }
+        break;
     }
   }
 
@@ -154,20 +181,17 @@ class WorkoutTaskHandler extends TaskHandler {
   void _startGps() {
     _gpsSub?.cancel();
     try {
-      // [REQ-3.1 FIX] Gunakan distanceFilter: 2m agar GPS update presisi
+      // Gunakan LocationAccuracy.high & jangan gunakan foregroundNotificationConfig
+      // karena FlutterForegroundTask sudah bertindak sebagai Foreground Service aktif.
       final settings = defaultTargetPlatform == TargetPlatform.android
           ? AndroidSettings(
-              accuracy: LocationAccuracy.bestForNavigation,
+              accuracy: LocationAccuracy.high,
               distanceFilter: 2,
               intervalDuration: const Duration(seconds: 1),
-              foregroundNotificationConfig: const ForegroundNotificationConfig(
-                notificationText: 'GPS tracking aktif',
-                notificationTitle: 'IbnuTify Workout',
-                enableWakeLock: true,
-              ),
+              forceLocationManager: false,
             )
           : const LocationSettings(
-              accuracy: LocationAccuracy.bestForNavigation,
+              accuracy: LocationAccuracy.high,
               distanceFilter: 2,
             );
 
@@ -183,7 +207,9 @@ class WorkoutTaskHandler extends TaskHandler {
           }
         });
       });
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[WorkoutTaskHandler] _startGps error: $e');
+    }
   }
 
   void _onPosition(Position pos) {

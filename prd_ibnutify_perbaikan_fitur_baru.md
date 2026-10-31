@@ -1,132 +1,108 @@
 # Product Requirement Document (PRD)
 
-## IbnuTify - System Modernization, Bug Fixes, & Feature Enhancements
+## IbnuTify - AI Downloader, Auto-Play Library, & Playlist Queue Priority
 
-**Versi Dokumen:** 2.1.0
+**Versi Dokumen:** 4.0.0 (Dedicated Focus Release)  
+**Tanggal:** 31 Oktober 2026  
+**Status:** Approved for Implementation  
+**Target Platform:** Android (Flutter + Chaquopy Python Bridge)  
 
-**Tanggal:** 30 Oktober 2026
-
-**Status:** In-Draft / Technical Review
-
-**Pengembang Utama:** Ibnu Sina Sudrajat
-
-**Platform Target:** Android (Flutter Cross-Platform Engine)
+---
 
 ## 1. Ringkasan Eksekutif (Executive Summary)
 
-IbnuTify adalah aplikasi pemutar musik *offline-first* dengan integrasi *Machine Learning* lokal, pelacak kebugaran, serta fitur pengunduh media pintar. Dokumen PRD ini bertujuan untuk memberikan spesifikasi teknis mendalam guna mengatasi masalah kestabilan latar belakang (*background service*), sinkronisasi UI/UX pengunduhan, pelacakan olahraga, hingga penambahan profil pengguna dan retensi *caching* lirik.
+Dokumen PRD Versi 4.0.0 ini secara khusus memusatkan perhatian pada **4 area perbaikan utama** terkait mekanisme pengunduhan media via AI Moods, sinkronisasi UI real-time, penyegaran pustaka lokal (library rescan) dengan *immediate auto-play*, pemulihan API AI multi-tier, serta perbaikan prioritas antrean pemutaran playlist.
 
-## 2. Gambaran Umum Sistem & Arsitektur (System Architecture)
+---
 
-Sistem IbnuTify dibangun atas arsitektur **Clean Architecture + MVVM** menggunakan *state management* `flutter_riverpod`.
+## 2. Analisis Akar Masalah (Root Cause Analysis)
 
-```
-[ UI Layer (Screens / Widgets) ]
-               │
-               ▼
-[ ViewModel Layer (Riverpod Notifiers) ]
-               │
-      ┌────────┴────────────────────────┬────────────────────────┐
-      ▼                                 ▼                        ▼
-[ Audio Engine ]              [ Local Storage ]          [ Background Services ]
-(just_audio / audio_service)   (SQLite / Prefs)           (Chaquopy / Foreground)
+### 2.1 Freeze UI Pengunduh Playlist & Kebocoran Teks Chat
+* **Bukti Log Python:**
+  ```text
+  --- Downloading track 1/9: Anggis Devaki - Dirimu Yang Dulu -> Track downloaded OK
+  --- Downloading track 2/9: Natasya Sabella - Menerima Luka -> Track downloaded OK
+  --- Downloading track 3/9: Aku Jeje - Lihat Kebunku ...
+  ```
+   Skrip Python `download_playlist` di Chaquopy terbukti berjalan secara sekuensial mengunduh lagu 1, 2, 3, dst.
+* **Akar Masalah UI Freeze:** Callback `MethodChannel` (`onTrackChange`) dari Chaquopy tidak memperbarui `DownloadState` di Riverpod setiap kali lagu berganti. Widget UI (`_DownloadSystemBubble`) hanya menerima pemicu (*event*) awal pada track 1 dan tidak pernah dipaksa melakukan *re-render* untuk track 2 hingga 9.
+* **Akar Masalah Kebocoran Teks (Chat Leak):** Pada `AIChatScreen`, string tautan Spotify pengguna di-render dua kali: sekali di dalam *User Chat Bubble* dan sekali lagi sebagai teks mentah (*unwrapped String*) di atas *System Download Card* (`image_70b67e.png`).
 
-```
+### 2.2 Pustaka Lokal (Library) Tidak Auto-Refresh & Tidak Auto-Play
+* **Akar Masalah:** Setelah lagu (single atau playlist) selesai diunduh, berkas `.mp3` fisik tersimpan di `/storage/emulated/0/Download/Ibnutify/`, tetapi basis data SQLite `songs` tidak secara otomatis memicu `scanLocalSongs()`. Pengguna terpaksa mematikan (*force close*) aplikasi agar lagu muncul.
+* **Akar Masalah Button "Lihat Library":** Tombol "Lihat Library" pada UI unduhan belum memiliki *event handler* yang memicu rescan SQLite sekaligus memutar lagu yang baru diunduh secara langsung.
 
-## 3. Spesifikasi Fitur & Perbaikan Detail (Detailed Requirements)
+### 2.3 AI API Fallback Terlalu Agresif
+* **Akar Masalah:** Objek `GeminiDatasource` langsung melakukan *catch block* ke `LocalFallbackResponse` pada kegagalan HTTP pertama tanpa mencoba rotasi API Key atau model cadangan (seperti OpenRouter API).
 
-### EPIC 1: Pengunduh Media & Integrasi UI (Media Downloader & UI Engine)
+### 2.4 Prioritas Antrean Pemutaran Playlist (Playlist Queue Isolation)
+* **Akar Masalah:** Saat pengguna memutar sebuah Playlist, algoritma Smart Shuffle memasukkan seluruh lagu dari perpustakaan global ke dalam antrean aktif, sehingga lagu-lagu di luar playlist ikut terputar secara acak sebelum playlist selesai.
 
-| ID | Modul / Fitur | Deskripsi Masalah | Spesifikasi Perbaikan & Solusi Teknis | Kriteria Penerimaan (Acceptance Criteria) | 
-| ----- | ----- | ----- | ----- | ----- | 
-| **REQ-1.1** | Atomic Download Engine | Unduhan sering gagal/gantung di kompresi Python, tetapi berkas sudah terbentuk sebagian sehingga memicu *conflict* saat diulang. | Implementasikan *atomic file writing* pada skrip Python (`yt-dlp`). Berkas diunduh sebagai `.tmp`. Hanya di-rename menjadi `.mp3` jika proses pengunduhan, ekstraksi, dan penyematan metadata berhasil 100%. | Berkas `.mp3` hanya muncul di direktori lokal jika proses unduhan selesai tanpa error. Tidak ada berkas corrupt yang tersisa jika terjadi pembatalan/kegagalan. | 
-| **REQ-1.2** | Real-Time UI Progress & Album Art | UI pengunduhan hanya menampilkan animasi *loading* bundar tanpa persentase, estimasi waktu, atau gambar *cover*. Teks masih menggunakan "ETA". | 1\. Hubungkan `MethodChannel` Python ke `StreamController` di Dart.  2\. Kirim status persentase, URL/path *thumbnail*, dan sisa detik secara *real-time*.  3\. Lokalisasi teks UI dari `"ETA"` menjadi `"Sisa Waktu"`. | UI menampilkan *progress bar* presisi (%), estimasi "Sisa Waktu", dan gambar *cover album* lagu yang sedang diproses. | 
-| **REQ-1.3** | State Obrolan & Tombol Pembatalan | Tautan yang dikirim pengguna langsung lenyap dari bubble chat dan langsung berpindah ke mode download tanpa kontrol pembatalan. | 1\. Pastikan `addMessage(userMessage)` dipanggil sebelum eksekusi unduhan.  2\. Ubah indikator *loading* bundar di sudut obrolan menjadi **Tombol Jeda/Batal (Pause/Cancel)** yang mengirimkan *Cancellation Token* ke skrip Python. | Teks input tautan pengguna tetap tampil dalam obrolan chat. Pengguna dapat menghentikan proses unduhan kapan saja via tombol Batal. | 
-| **REQ-1.4** | Fallback Album Art Embedding | Beberapa hasil unduhan tidak memiliki *cover art* (kosong/hitam). | Jika penyematan `--embed-thumbnail` di Python gagal, panggil `AlbumArtService` di Flutter untuk mencari gambar via API/CDN, lalu simpan berkas `.jpg` ke direktori `Download/Ibnutify/`. | Setiap lagu yang berhasil diunduh memiliki *artwork* album yang valid di SQLite dan direktori lokal. | 
+---
 
-### EPIC 2: Modul Lirik & Interaksi Sync (Local Lyrics Engine)
-
-| ID | Modul / Fitur | Deskripsi Masalah | Spesifikasi Perbaikan & Solusi Teknis | Kriteria Penerimaan (Acceptance Criteria) | 
-| ----- | ----- | ----- | ----- | ----- | 
-| **REQ-2.1** | Local Lyrics Caching | Lirik selalu diunduh ulang dari internet setiap kali lagu diputar (pemborosan kuota). | Sebelum memanggil `LyricsApiService`, lakukan kueri SQLite: |  | 
-| $$ \text{SELECT lyrics FROM songs WHERE uri = ?} $$ |  |  |  |  | 
-| Jika lirik ditemukan, gunakan lirik lokal. Jika tidak, unduh dari API lalu simpan ke database/berkas `.lrc`. | Lirik hanya diunduh **satu kali** saat koneksi pertama, dan selanjutnya dibaca 100% secara *offline*. |  |  |  | 
-| **REQ-2.2** | Sync Jump & Scroll Lock Release | Pengguna tidak bisa mengetuk baris lirik aktif/lain saat posisi scroll manual berada jauh dari baris yang sedang berputar. | Reset flag `userIsScrolling = false` ketika pengguna mengetuk baris lirik mana pun atau menekan tombol "Sync". Panggil `itemScrollController.scrollTo()` menuju indeks waktu baris tersebut dan jalankan `audioHandler.seek(timestamp)`. | Mengetuk baris lirik apa pun langsung memindahkan posisi pemutaran lagu ke detik lirik tersebut dan mengembalikan *auto-scroll*. | 
-
-### EPIC 3: Pelacak Olahraga (Workout Tracking & Sensor Fusion)
-
-Formula kalkulasi jarak menggunakan persamaan **Haversine**:
-
-$$
-d = 2r \arcsin \left( \sqrt{\sin^2\left(\frac{\Delta \phi}{2}\right) + \cos(\phi_1)\cos(\phi_2)\sin^2\left(\frac{\Delta \lambda}{2}\right)} \right)
-$$
-
-| ID | Modul / Fitur | Deskripsi Masalah | Spesifikasi Perbaikan & Solusi Teknis | Kriteria Penerimaan (Acceptance Criteria) | 
-| ----- | ----- | ----- | ----- | ----- | 
-| **REQ-3.1** | GPS Tracking & Haversine Fix | Jarak tertahan di `0.00 KM` dan titik GPS tertahan di `1 titik GPS` meskipun lokasi aktif. | Turunkan `distanceFilter` GPS menjadi 2 meter. Pastikan kalkulasi Haversine di-eksekusi secara berurutan setiap kali jumlah titik GPS $\ge 2$. | Jarak (KM), Pace, dan rute peta bergerak secara dinamis sesuai pergerakan pengguna saat olahraga. | 
-| **REQ-3.2** | Background Location & Wakelock | Pelacakan mati/terhenti saat layar HP terkunci (Doze Mode). | Tambahkan izin `ACCESS_BACKGROUND_LOCATION` serta pasang `WakelockPlus` pada `WorkoutTaskHandler` yang berjalan di *Android Foreground Service*. | Pelacakan olahraga tetap berjalan akurat 100% meskipun HP dimasukkan ke dalam saku dengan layar mati selama berjam-jam. | 
-| **REQ-3.3** | Sensor Pedometer & Activity Recognition | Langkah (Step), SPM, dan Kalori bernilai `0`. | Minta izin runtime `android.permission.ACTIVITY_RECOGNITION`. Hubungkan sensor *Accelerometer* internal untuk mendeteksi puncak gelombang langkah. | Metrik Langkah, SPM, dan perkiraan Kalori terhitung secara *real-time*. | 
-
-### EPIC 4: Notifikasi Pemutaran Media (Media Notification)
-
-| ID | Modul / Fitur | Deskripsi Masalah | Spesifikasi Perbaikan & Solusi Teknis | Kriteria Penerimaan (Acceptance Criteria) | 
-| ----- | ----- | ----- | ----- | ----- | 
-| **REQ-4.1** | Notification Album Art | Cover album di panel notifikasi OS sering kosong/hilang. | Format nilai `artUri` pada `MediaItem` menggunakan skema URI yang valid (`Uri.file(path).toString()`). Lakukan *downscaling* resolusi gambar maksimal $512 \times 512$ pixel agar tidak ditolak oleh Android OS Notification Manager. | Panel notifikasi OS selalu menampilkan gambar *cover art* lagu yang sedang diputar. | 
-| **REQ-4.2** | Notification Seek Bar Sync | *Progress bar* notifikasi berhenti bergerak saat aplikasi berada di *recent apps*. | Pancarkan (*broadcast*) `PlaybackStateCompat` dari `audio_service` secara rutin dengan menyertakan variabel `position`, `playbackSpeed`, dan `bufferedPosition`. | *Progress bar* pada bar notifikasi OS terus berjalan mulus meskipun aplikasi berada di latar belakang. | 
-
-### EPIC 5: Manajemen Profil User, Riwayat, & Developer Branding
-
-#### 5.1 Layar Profil Pengguna (User Profile Screen)
-
-* **Aksi Navigasi:** Mengklik ikon profil pada bagian kiri atas header `HomeScreen` (`_M3TopBar`) akan membuka `UserProfileScreen`.
-
-* **Form Data Lokal:** Menyediakan bidang isian yang tersimpan di `SharedPreferences`/SQLite:
-
-  * Nama Pengguna (String)
-
-  * Umur (Integer)
-
-  * Genre Musik Favorit (String)
-
-* **Developer Watermark (Bagian Bawah Screen):**
-
-  * **Foto Profil Pengembang:** Diambil dari URL `https://ibnusinasudrajat.netlify.app/assets/img/ibnu.png`.
-
-  * **Teks Hak Cipta:** *"Aplikasi dibuat oleh Ibnu Sina Sudrajat"*.
-
-  * **Interaksi Klik:** Mengklik area watermark akan membuka URL `https://ibnusinasudrajat.netlify.app/` pada browser eksternal perangkat (*External Application Browser* via `url_launcher`).
+## 3. Spesifikasi Fitur & Perbaikan Detail
 
 ```
-┌───────────────────────────────────────────┐
-│              PROFIL PENGGUNA              │
-├───────────────────────────────────────────┤
-│ Nama : [ Ibnu Sina                      ] │
-│ Umur : [ 22                             ] │
-│                                           │
-│ [ SIMPAN DATA ]                           │
-│                                           │
-│ ───────────────────────────────────────── │
-│ ┌───────────────────────────────────────┐ │
-│ │ (Foto) Aplikasi dibuat oleh          │ │
-│ │        Ibnu Sina Sudrajat             │ │
-│ └───────────────────────────────────────┘ │
-└───────────────────────────────────────────┘
+[ Flow Pengunduhan Playlist & Auto-Play ]
 
+  Python (yt-dlp) ──(Progress Callback)──> Kotlin MethodChannel ──> Riverpod DownloadNotifier
+                                                                            │
+                                                                   (Update UI Real-Time)
+                                                                            │
+  Completion / Klik "Lihat Library" ──> SQLite Rescan ──> Play Song/Playlist Directly!
 ```
 
-#### 5.2 Tombol Riwayat Pemutaran (History Routing Fix)
+### EPIC 1: Synchronized Playlist Downloader & Chat UI Fix
 
-* **Aksi Navigasi:** Menghubungkan *callback* `onPressed` pada ikon jam/riwayat di bagian header kanan atas `HomeScreen` menuju `RecentlyPlayedScreen` / `ListeningHistoryScreen`.
+| ID | Modul / Fitur | Deskripsi Masalah | Spesifikasi Perbaikan & Solusi Teknis | Kriteria Penerimaan (Acceptance Criteria) |
+| :--- | :--- | :--- | :--- | :--- |
+| **REQ-1.1** | Real-time Playlist Track Progress Stream | Log menunjukkan Python mengunduh track 1, 2, 3 (`Dirimu Yang Dulu`, `Menerima Luka`, dst), tetapi UI terus menampilkan track 1/9 (`image_70b67e.png`). | 1. Modifikasi skrip `download_playlist()` di Python agar memanggil callback `native_bridge.on_track_progress(current_index, total_tracks, track_title, artist, cover_url)` pada setiap awal iterasi loop lagu.<br>2. Sambungkan callback native ke `MethodChannel` stream di Dart (`com.ibnutify.ml/audio`).<br>3. Di Flutter `DownloadNotifier`, perbarui `state = state.copyWith(...)` setiap ada payload progress baru agar UI kartu lagu langsung berganti mengikuti lagu yang sedang diproses. | Kartu UI unduhan memperbarui judul lagu, nama artis, cover album, dan indikator persentase (`X/Y lagu`) secara real-time setiap kali lagu berganti. |
+| **REQ-1.2** | Perbaikan Kebocoran Teks Chat (Chat Bubble Leak) | Input tautan pengguna (`https://open.spotify.com/playlist/...`) bocor dan tampil sebagai teks mentah di luar bubble obrolan (`image_70b67e.png`). | 1. Pindai widget builder di `AIChatScreen` dan `AIChatMessageTile`.<br>2. Hapus pengkondisian `Text(message.content)` duplikat yang dirender di luar komponen `ChatBubble`.<br>3. Pastikan string tautan pengguna HANYA muncul 1x di dalam *Right-Aligned User Bubble*. | Tautan pengguna hanya tampil rapi dalam bubble chat pengguna (kanan) dan tidak ada teks tautan mentah yang melayang di atas kartu sistem. |
 
-## 4. Matriks Validasi & Pengujian Debugging (QA Matrix)
+---
 
+### EPIC 2: Post-Download Rescan & Immediate Auto-Play
+
+| ID | Modul / Fitur | Deskripsi Masalah | Spesifikasi Perbaikan & Solusi Teknis | Kriteria Penerimaan (Acceptance Criteria) |
+| :--- | :--- | :--- | :--- | :--- |
+| **REQ-2.1** | Automatic Storage & Database Rescan | Lagu yang selesai diunduh tidak langsung muncul di pustaka aplikasi tanpa restart. | 1. Setelah status unduhan (single atau playlist) mencapai `100% Completed`, panggil fungsi `ref.read(songsProvider.notifier).rescanLibrary()`.<br>2. Pemicu rescan akan memindai folder `/Download/Ibnutify/`, mengindeks berkas `.mp3` baru ke SQLite `songs`, dan mengekstrak ID3 Tag-nya. | Pustaka lagu lokal di SQLite dan UI `LibraryScreen` langsung ter-update secara instan tanpa perlu mematikan aplikasi. |
+| **REQ-2.2** | Auto-Play Single & Playlist / "Lihat Library" Action | Klik tombol "Lihat Library" atau unduhan selesai tidak memutar lagu yang baru saja diunduh. | 1. Ketika tombol **"Lihat Library"** diklik (atau saat unduhan selesai otomatis):<br>   a. Jalankan rescan basis data.<br>   b. Cari `SongModel` dari lagu/playlist yang baru diunduh berdasarkan `uri` atau `path`.<br>   c. Panggil `playerProvider.notifier.playSong(newSong)` untuk **Single Track**, atau `playerProvider.notifier.playPlaylist(newPlaylistSongs)` untuk **Playlist**.<br>2. Alihkan navigasi UI langsung ke `PlayerScreen` atau buka `MiniPlayer`. | Mengetuk "Lihat Library" (atau penyelesaian unduhan) secara otomatis memicu pemutaran lagu/playlist yang baru diunduh detik itu juga. |
+
+---
+
+### EPIC 3: AI Moods Multi-Tier API Failover Engine
+
+| ID | Modul / Fitur | Deskripsi Masalah | Spesifikasi Perbaikan & Solusi Teknis | Kriteria Penerimaan (Acceptance Criteria) |
+| :--- | :--- | :--- | :--- | :--- |
+| **REQ-3.1** | Multi-Tier AI Provider Rotation | API AI Moods sering gagal dan langsung mundur ke fallback lokal (`Exception: No endpoints found`). | 1. Implementasikan pola *Circuit Breaker* dan rotasi API di `GeminiDatasource`:<br>   - **Tier 1:** Gemini 3 Flash Primary API Key.<br>   - **Tier 2:** Gemini 3 Flash Secondary Backup Key.<br>   - **Tier 3:** OpenRouter API (`google/gemma-2-9b-it:free` atau `meta-llama/llama-3-8b-instruct:free`).<br>   - **Tier 4:** Local Heuristic Parser (Hanya jika Tier 1-3 gagal total).<br>2. Cetak log debug transparan jika terjadi pergantian Tier tanpa menghentikan flow obrolan. | Fitur obrolan AI Moods dan ekstraksi playlist berjalan stabil tanpa pernah mendadak gagal ke fallback lokal selama ada koneksi internet. |
+
+---
+
+### EPIC 4: Playlist Queue Priority & Smart Shuffle Scope
+
+| ID | Modul / Fitur | Deskripsi Masalah | Spesifikasi Perbaikan & Solusi Teknis | Kriteria Penerimaan (Acceptance Criteria) |
+| :--- | :--- | :--- | :--- | :--- |
+| **REQ-4.1** | Strictly Isolated Playlist Queue | Saat memutar lagu dari daftar Playlist, lagu di luar playlist ikut terputar acak mengacaukan urutan playlist. | 1. Ketika pengguna memutar sebuah Playlist (misal: "My Playlist #20"):<br>   a. Buat antrean terisolasi (`PlaylistQueue`) yang **hanya berisi lagu-lagu dalam playlist tersebut**.<br>   b. Jika Smart Shuffle aktif, jalankan `computeSmartShuffleIndices()` **hanya pada scope lagu-lagu di dalam playlist tersebut**.<br>   c. Lagu-lagu perpustakaan luar HANYA boleh diputar jika seluruh lagu dalam playlist tersebut telah selesai diputar habis.<br>2. Saat pengguna menekan *Next*, pastikan lagu berikutnya tetap berasal dari anggota playlist aktif. | Pemutaran playlist memprioritaskan seluruh lagu anggota playlist terlebih dahulu hingga habis sebelum berpindah ke lagu luar. |
+
+---
+
+## 4. Rencana Pengujian Teknis (QA Checklist)
+
+```text
+[ Sesi Pengujian QA Versi 4.0.0 ]
+│
+├── 1. Test Playlist Downloader Progress UI
+│    └── Unduh playlist Spotify (9 lagu). Pastikan UI berpindah dari Track 1/9 -> 2/9 -> 3/9 secara real-time.
+│
+├── 2. Test Chat Bubble Text Leakage
+│    └── Paste URL playlist Spotify di AI Chat. Pastikan tautan HANYA ada di dalam User Bubble kanan.
+│
+├── 3. Test Rescan & Auto-Play "Lihat Library"
+│    └── Setelah lagu selesai diunduh, ketuk "Lihat Library". Pastikan lagu yang baru diunduh LANGSUNG berbunyi/diputar.
+│
+├── 4. Test Multi-Tier AI API Rotation
+│    └── Simulasikan API Key Tier 1 error. Pastikan sistem otomatis switch ke Tier 2/OpenRouter tanpa crash.
+│
+└── 5. Test Playlist Priority Queue
+     └── Putar "My Playlist #20". Tekan Next berulang kali. Pastikan hanya lagu dalam playlist tersebut yang terputar.
 ```
-[Sesi Debugging Final]
-├── 1. Test Download Engine   --> Simulasi link playlist 30 lagu & single track.
-├── 2. Test GPS Workout       --> Run outdoor tracking dengan layar terkunci.
-├── 3. Test Lyrics Caching    --> Diputar offline (Airplane Mode) setelah di-cache.
-└── 4. Test External Launcher --> Klik Watermark Dev pada Profile Screen.
-
-```
-
-*Dokumen PRD ini disetujui untuk diimplementasikan secara langsung oleh AI Coding Agent pada codebase IbnuTify.*

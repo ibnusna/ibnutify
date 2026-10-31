@@ -42,14 +42,24 @@ class AltitudeKalmanFilter {
 /// Detects footsteps from raw accelerometer data using:
 /// 1. Low-pass filter to remove high-frequency noise
 /// 2. Magnitude of gravity-removed acceleration
-/// 3. Peak detection with adaptive threshold
+/// 3. Peak & valley detection with refractory debounce and adaptive threshold
 class StepDetector {
-  // Low-pass filter state
+  // Low-pass filter state for gravity isolation
+  bool _initialized = false;
   double _filteredX = 0;
   double _filteredY = 0;
   double _filteredZ = 0;
-  double _prevMagnitude = 0;
+
+  // Smoothed linear magnitude (eliminates 60Hz sensor noise/micro-ripples)
+  double _smoothMagnitude = 0;
+  double _prevSmoothMagnitude = 0;
   bool _ascending = false;
+
+  // Hysteresis: must drop below valley before arming for the next step peak
+  bool _isArmed = true;
+
+  // Refractory debounce timestamp (human limit: minimum 240ms between steps)
+  int _lastStepTimestamp = 0;
 
   // Step count
   int _stepCount = 0;
@@ -57,11 +67,13 @@ class StepDetector {
   // Sliding window for cadence (last 10 seconds of timestamps)
   final List<int> _stepTimestamps = [];
 
-  // Adaptive threshold (updated per sport mode) — calibrated for linear acceleration (gravity removed)
-  double _threshold = 1.4;
+  // Adaptive threshold & valley (updated per sport mode)
+  double _threshold = 1.5;
+  double _valleyThreshold = 0.5;
   bool _enabled = true; // disabled for Sepeda mode
 
-  static const double _alpha = 0.8; // low-pass filter smoothing
+  static const double _gravityAlpha = 0.85; // smoothing for gravity estimation
+  static const double _magnitudeAlpha = 0.35; // smoothing for linear magnitude
 
   int get stepCount => _stepCount;
 
@@ -69,56 +81,87 @@ class StepDetector {
   void configureSportMode(String sportMode) {
     switch (sportMode) {
       case 'Berjalan':
-        _threshold = 1.2;
+        _threshold = 1.4;
+        _valleyThreshold = 0.4;
         _enabled = true;
         break;
       case 'Berlari':
-        _threshold = 2.0;
+        _threshold = 2.2;
+        _valleyThreshold = 0.7;
         _enabled = true;
         break;
       case 'Mendaki':
-        _threshold = 1.1;
+        _threshold = 1.3;
+        _valleyThreshold = 0.4;
         _enabled = true;
         break;
       case 'Sepeda':
         _enabled = false; // cadence pedaling not tracked via accel
         break;
       default:
-        _threshold = 1.3;
+        _threshold = 1.5;
+        _valleyThreshold = 0.5;
         _enabled = true;
     }
   }
 
   /// Process one accelerometer sample.
-  /// Returns true if a step was detected.
+  /// Returns true if a valid footstep was detected.
   bool process(AccelerometerEvent event) {
     if (!_enabled) return false;
 
-    // Low-pass filter (isolate gravity component)
-    _filteredX = _alpha * _filteredX + (1 - _alpha) * event.x;
-    _filteredY = _alpha * _filteredY + (1 - _alpha) * event.y;
-    _filteredZ = _alpha * _filteredZ + (1 - _alpha) * event.z;
+    // 0. Inisialisasi filter gravitasi dari sampel pertama untuk mencegah lonjakan artefak startup
+    if (!_initialized) {
+      _filteredX = event.x;
+      _filteredY = event.y;
+      _filteredZ = event.z;
+      _initialized = true;
+      _isArmed = false;
+      _prevSmoothMagnitude = 0;
+      _smoothMagnitude = 0;
+      return false;
+    }
 
-    // Magnitude of high-pass component (linear accel = raw - gravity estimate)
+    // 1. Low-pass filter (isolate gravity component)
+    _filteredX = _gravityAlpha * _filteredX + (1 - _gravityAlpha) * event.x;
+    _filteredY = _gravityAlpha * _filteredY + (1 - _gravityAlpha) * event.y;
+    _filteredZ = _gravityAlpha * _filteredZ + (1 - _gravityAlpha) * event.z;
+
+    // 2. Linear acceleration magnitude (raw minus gravity)
     final linX = event.x - _filteredX;
     final linY = event.y - _filteredY;
     final linZ = event.z - _filteredZ;
-    final magnitude = math.sqrt(linX * linX + linY * linY + linZ * linZ);
+    final rawMagnitude = math.sqrt(linX * linX + linY * linY + linZ * linZ);
 
+    // 3. Smooth the linear magnitude to prevent false multi-triggering
+    _smoothMagnitude = _magnitudeAlpha * rawMagnitude + (1 - _magnitudeAlpha) * _smoothMagnitude;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
     bool stepDetected = false;
 
-    // Peak detection: detect transition from ascending to descending above threshold
-    if (magnitude > _prevMagnitude) {
-      _ascending = true;
-    } else if (_ascending && _prevMagnitude > _threshold && magnitude < _prevMagnitude) {
-      // Local peak above threshold — count as step
-      _ascending = false;
-      _stepCount++;
-      _stepTimestamps.add(DateTime.now().millisecondsSinceEpoch);
-      stepDetected = true;
+    // 4. Valley detection: Re-arm detector when acceleration drops into the trough
+    if (!_isArmed && _smoothMagnitude < _valleyThreshold) {
+      _isArmed = true;
     }
 
-    _prevMagnitude = magnitude;
+    // 5. Peak detection with refractory debounce
+    if (_smoothMagnitude > _prevSmoothMagnitude) {
+      _ascending = true;
+    } else if (_ascending && _prevSmoothMagnitude > _threshold && _smoothMagnitude < _prevSmoothMagnitude) {
+      _ascending = false;
+      // Step condition:
+      // - Detector is ARMED (descended into valley since previous step)
+      // - At least 240ms have elapsed since last step (max ~250 SPM human limit)
+      if (_isArmed && (now - _lastStepTimestamp >= 240)) {
+        _isArmed = false;
+        _lastStepTimestamp = now;
+        _stepCount++;
+        _stepTimestamps.add(now);
+        stepDetected = true;
+      }
+    }
+
+    _prevSmoothMagnitude = _smoothMagnitude;
     return stepDetected;
   }
 
@@ -126,6 +169,10 @@ class StepDetector {
   double getCadenceSpm() {
     if (!_enabled) return 0;
     final now = DateTime.now().millisecondsSinceEpoch;
+    // Jika tidak ada langkah selama > 3 detik, pengguna diam (cadence = 0)
+    if (_lastStepTimestamp > 0 && (now - _lastStepTimestamp > 3000)) {
+      return 0;
+    }
     const windowMs = 10000; // 10 second window
     _stepTimestamps.removeWhere((t) => now - t > windowMs);
     if (_stepTimestamps.isEmpty) return 0;
@@ -136,11 +183,15 @@ class StepDetector {
   void reset() {
     _stepCount = 0;
     _stepTimestamps.clear();
+    _initialized = false;
     _filteredX = 0;
     _filteredY = 0;
     _filteredZ = 0;
-    _prevMagnitude = 0;
+    _smoothMagnitude = 0;
+    _prevSmoothMagnitude = 0;
     _ascending = false;
+    _isArmed = false;
+    _lastStepTimestamp = 0;
   }
 }
 
