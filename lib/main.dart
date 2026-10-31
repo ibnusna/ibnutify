@@ -79,8 +79,8 @@ Future<void> main() async {
         androidStopForegroundOnPause: true,
         // Warna aksen di notification (warna hijau IbnuTify)
         notificationColor: Color(0xFF1DB954),
-        // [FIX-ICON] Gunakan ic_notification.png bukan icon Flutter default
-        androidNotificationIcon: 'drawable/ic_notification',
+        // [REQ-3.1 FIX] Gunakan ic_stat_music.png monokrom putih transparan untuk status bar MIUI & Android
+        androidNotificationIcon: 'drawable/ic_stat_music',
         // [REQ-4.1] Ukuran artwork di notification: maksimal 512x512
         artDownscaleWidth: 512,
         artDownscaleHeight: 512,

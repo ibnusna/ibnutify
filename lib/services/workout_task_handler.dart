@@ -85,6 +85,11 @@ class WorkoutTaskHandler extends TaskHandler {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!_isPaused) {
         _elapsedSeconds++;
+        _sensorFusion.updateTick(
+          elapsedSeconds: _elapsedSeconds,
+          sportMode: _sportMode,
+          hrBpm: _heartRateBpm.toDouble(),
+        );
       }
 
       // Kirim state update ke main isolate
@@ -170,6 +175,13 @@ class WorkoutTaskHandler extends TaskHandler {
         locationSettings: settings,
       ).listen(_onPosition, onError: (err) {
         debugPrint('[WorkoutTaskHandler] GPS error: $err');
+        // Auto-reconnect stream GPS setelah jeda singkat agar tracking tidak mati permanen
+        _gpsSub?.cancel();
+        Future.delayed(const Duration(seconds: 3), () {
+          if (!_isPaused) {
+            _startGps();
+          }
+        });
       });
     } catch (_) {}
   }

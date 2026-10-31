@@ -660,11 +660,6 @@ class _LyricsPeekCard extends ConsumerWidget {
     ).toColor();
   }
 
-  /// Ukuran font tetap (tidak adaptif) agar tampilan konsisten antar lagu.
-  double _adaptiveFontSize(List<String> lines) {
-    return 16.0;
-  }
-
   List<String> _previewLines(String lyrics) {
     return lyrics
         .replaceAll(RegExp(r'\[\d+:\d+(?:\.\d+)?\]'), '') // Strip timestamps
@@ -791,7 +786,6 @@ class _LyricsPeekCard extends ConsumerWidget {
       lines = _previewLines(state.lyrics!);
     }
 
-    final fontSize = _adaptiveFontSize(lines);
     // Hapus SizedBox agar tinggi preview fleksibel menyesuaikan layar / lirik
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -802,18 +796,18 @@ class _LyricsPeekCard extends ConsumerWidget {
             : (e.key == lines.length - 1);
 
         return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.only(bottom: 8),
           child: AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 300),
             style: TextStyle(
               color: isHighlighted
                   ? Colors.white
                   : Colors.white.withOpacity(0.55),
-              fontSize: isHighlighted ? fontSize + 4 : fontSize,
-              fontWeight: FontWeight.w700,
+              fontSize: isHighlighted ? 15 : 13,
+              fontWeight: isHighlighted ? FontWeight.w800 : FontWeight.w600,
               height: 1.35,
             ),
-            maxLines: 1,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
             child: Text(e.value),
           ),

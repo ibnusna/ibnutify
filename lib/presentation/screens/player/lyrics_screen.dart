@@ -348,6 +348,29 @@ class _LyricsViewState extends ConsumerState<_LyricsView> {
           alignment: 0.3,
         );
       }
+    } else if (widget.scroll.hasClients) {
+      // [REQ-4.3 FIX] Jika item belum ter-mount (scrolled far away),
+      // lompat ke perkiraan posisi offset, lalu sinkronkan presisi via ensureVisible.
+      final approxOffset = (_activeIndex * 52.0 - 150.0).clamp(
+        0.0,
+        widget.scroll.position.maxScrollExtent,
+      );
+      widget.scroll.animateTo(
+        approxOffset,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      ).then((_) {
+        if (!mounted) return;
+        final targetCtx = _lineKeys[_activeIndex].currentContext;
+        if (targetCtx != null && targetCtx.mounted) {
+          Scrollable.ensureVisible(
+            targetCtx,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            alignment: 0.3,
+          );
+        }
+      });
     }
   }
 
@@ -423,10 +446,9 @@ class _LyricsViewState extends ConsumerState<_LyricsView> {
               child: ListView.builder(
                 controller: widget.scroll,
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(24, 12, 24, 300),
-                itemCount: lines.length + 1,
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 40),
+                itemCount: lines.length,
                 itemBuilder: (ctx, i) {
-                  if (i == lines.length) return _buildFooter();
                   final isActive = i == _activeIndex;
                   return GestureDetector(
                     behavior: HitTestBehavior.opaque,
@@ -528,42 +550,11 @@ class _LyricsViewState extends ConsumerState<_LyricsView> {
       child: ListView.builder(
         controller: widget.scroll,
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(24, 12, 24, 120),
-        itemCount: blocks.length + 1,
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 40),
+        itemCount: blocks.length,
         itemBuilder: (ctx, i) {
-          if (i == blocks.length) return _buildFooter();
           return _LyricParagraph(text: blocks[i]);
         },
-      ),
-    );
-  }
-
-  Widget _buildFooter() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 24, bottom: 8),
-      child: Column(
-        children: [
-          Center(
-            child: Container(
-              width: 36,
-              height: 3,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Akhir lirik',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.2),
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 2,
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -57,8 +57,8 @@ class StepDetector {
   // Sliding window for cadence (last 10 seconds of timestamps)
   final List<int> _stepTimestamps = [];
 
-  // Adaptive threshold (updated per sport mode)
-  double _threshold = 11.8;
+  // Adaptive threshold (updated per sport mode) — calibrated for linear acceleration (gravity removed)
+  double _threshold = 1.4;
   bool _enabled = true; // disabled for Sepeda mode
 
   static const double _alpha = 0.8; // low-pass filter smoothing
@@ -69,22 +69,22 @@ class StepDetector {
   void configureSportMode(String sportMode) {
     switch (sportMode) {
       case 'Berjalan':
-        _threshold = 11.2;
+        _threshold = 1.2;
         _enabled = true;
         break;
       case 'Berlari':
-        _threshold = 12.2;
+        _threshold = 2.0;
         _enabled = true;
         break;
       case 'Mendaki':
-        _threshold = 10.8;
+        _threshold = 1.1;
         _enabled = true;
         break;
       case 'Sepeda':
         _enabled = false; // cadence pedaling not tracked via accel
         break;
       default:
-        _threshold = 11.5;
+        _threshold = 1.3;
         _enabled = true;
     }
   }
@@ -126,7 +126,7 @@ class StepDetector {
   double getCadenceSpm() {
     if (!_enabled) return 0;
     final now = DateTime.now().millisecondsSinceEpoch;
-    final windowMs = 10000; // 10 second window
+    const windowMs = 10000; // 10 second window
     _stepTimestamps.removeWhere((t) => now - t > windowMs);
     if (_stepTimestamps.isEmpty) return 0;
     // Extrapolate to spm: steps_in_10s / 10 * 60
@@ -461,6 +461,26 @@ class SensorFusionSnapshot {
     this.currentAltitudeM = 0,
     this.estimatedCalories = 0,
   });
+
+  SensorFusionSnapshot copyWith({
+    int? stepCount,
+    double? cadenceSpm,
+    String? detectedActivity,
+    double? elevationGainM,
+    double? elevationLossM,
+    double? currentAltitudeM,
+    double? estimatedCalories,
+  }) {
+    return SensorFusionSnapshot(
+      stepCount: stepCount ?? this.stepCount,
+      cadenceSpm: cadenceSpm ?? this.cadenceSpm,
+      detectedActivity: detectedActivity ?? this.detectedActivity,
+      elevationGainM: elevationGainM ?? this.elevationGainM,
+      elevationLossM: elevationLossM ?? this.elevationLossM,
+      currentAltitudeM: currentAltitudeM ?? this.currentAltitudeM,
+      estimatedCalories: estimatedCalories ?? this.estimatedCalories,
+    );
+  }
 }
 
 /// Orchestrates all sensor sub-systems.
@@ -486,6 +506,9 @@ class SensorFusionEngine {
   // Public snapshot (updated each second by GPS tick)
   SensorFusionSnapshot _snapshot = const SensorFusionSnapshot();
   SensorFusionSnapshot get snapshot => _snapshot;
+  bool get isAccelAvailable => _isAccelAvailable;
+  String get currentSportMode => _sportMode;
+  double get lastAltitude => _lastAltitude;
 
   void start(String sportMode) {
     _sportMode = sportMode;
@@ -599,6 +622,38 @@ class SensorFusionEngine {
       elevationGainM: _elevationTracker.elevationGainM,
       elevationLossM: _elevationTracker.elevationLossM,
       currentAltitudeM: _elevationTracker.currentAltitudeM,
+      estimatedCalories: calories,
+    );
+
+    return _snapshot;
+  }
+
+  /// Periodic tick dipanggil tiap 1s dari Timer WorkoutTaskHandler
+  /// Memastikan langkah (steps), SPM, dan kalori terbarui secara kontinyu
+  /// bahkan saat sinyal GPS sedang mencari posisi (cold start).
+  SensorFusionSnapshot updateTick({
+    required int elapsedSeconds,
+    required String sportMode,
+    double hrBpm = 0,
+  }) {
+    if (!_isRunning) return _snapshot;
+
+    double calories;
+    if (hrBpm > 40) {
+      calories = CalorieEstimator.estimateWithHR(
+        hrBpm: hrBpm,
+        durationSeconds: elapsedSeconds,
+      );
+    } else {
+      calories = CalorieEstimator.estimateWithMET(
+        sportMode: sportMode,
+        durationSeconds: elapsedSeconds,
+      );
+    }
+
+    _snapshot = _snapshot.copyWith(
+      stepCount: _stepDetector.stepCount,
+      cadenceSpm: _stepDetector.getCadenceSpm(),
       estimatedCalories: calories,
     );
 

@@ -41,12 +41,22 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
   int _manualQueueCount = 0;
   int _lastIndex = -1;
   MediaItem? _activeMediaItem;
+  Timer? _playbackProgressTimer;
 
   IbnuTifyAudioHandler() {
-    // Synchronize playbackState (seekbar, controls, play/pause toggle) with audio_service [REQ-4.2]
+    // Synchronize playbackState (seekbar, controls, play/pause toggle) with audio_service [REQ-4.2 & REQ-3.3]
     _player.playbackEventStream.listen(_broadcastState);
     _player.playerStateStream.listen((playerState) {
       _broadcastState();
+      _playbackProgressTimer?.cancel();
+      if (playerState.playing) {
+        // [REQ-3.3 FIX] Pancarkan PlaybackStateCompat setiap 1s saat playing agar seekbar tidak freeze di background
+        _playbackProgressTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+          if (_player.playing) {
+            _broadcastState();
+          }
+        });
+      }
       // Non-Stop Playback Engine: Ketika antrean musik selesai (ProcessingState.completed)
       // dan loopMode off, ulangi antrean dari awal secara otomatis agar musik 24/7 tidak terhenti!
       if (playerState.processingState == ProcessingState.completed) {
@@ -114,6 +124,8 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
     final songId = item.extras?['songId'] as int?;
     if (songId != null && _artworksCache.containsKey(songId)) {
       item = item.copyWith(artUri: Uri.file(_artworksCache[songId]!));
+    } else if (songId != null && item.artUri == null) {
+      _resolveArtworkFile(songId, item);
     }
     _activeMediaItem = item;
     mediaItem.add(item);
@@ -127,11 +139,36 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
       final songId = item.extras?['songId'] as int?;
       if (songId != null && _artworksCache.containsKey(songId)) {
         item = item.copyWith(artUri: Uri.file(_artworksCache[songId]!));
+      } else if (songId != null && item.artUri == null) {
+        _resolveArtworkFile(songId, item);
       }
       _activeMediaItem = item;
       mediaItem.add(item);
       _handleSongChangeForTracking(item);
     }
+  }
+
+  /// [REQ-3.2 FIX] Ekspor byte artwork ID3 ke berkas temporary jika lagu belum punya artUri
+  void _resolveArtworkFile(int songId, MediaItem item) async {
+    try {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/ibnutify_art_$songId.jpg');
+      if (await file.exists()) {
+        _artworksCache[songId] = file.path;
+        final updated = item.copyWith(artUri: Uri.file(file.path));
+        _activeMediaItem = updated;
+        mediaItem.add(updated);
+        return;
+      }
+      final bytes = await _localDatasource.queryArtwork(songId);
+      if (bytes != null && bytes.isNotEmpty) {
+        await file.writeAsBytes(bytes, flush: true);
+        _artworksCache[songId] = file.path;
+        final updated = item.copyWith(artUri: Uri.file(file.path));
+        _activeMediaItem = updated;
+        mediaItem.add(updated);
+      }
+    } catch (_) {}
   }
 
   // ─── Playback Controls ─────────────────────────────────────────────────────
@@ -150,6 +187,7 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
 
   @override
   Future<void> stop() async {
+    _playbackProgressTimer?.cancel();
     _recordPlayLogIfNeeded();
     await _player.stop();
     return super.stop();
@@ -327,6 +365,7 @@ class IbnuTifyAudioHandler extends BaseAudioHandler
   }
 
   Future<void> clearQueue() async {
+    _playbackProgressTimer?.cancel();
     _recordPlayLogIfNeeded();
     await _player.stop();
     _audioSource = null;

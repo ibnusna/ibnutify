@@ -1,201 +1,149 @@
-=========================================
-Starting download process for Spotify URL: https://open.spotify.com/track/1NuvCcuRUGN54bkSLk51LC?si=q3MD6LHySQWrkIsyGLAu0A&utm_source=copy-link
-Download directory: /storage/emulated/0/Download/Ibnutify
-Passed FFmpeg path: /data/app/~~MGbv29BEKAbgwKnKnirV8Q==/com.ibnutify.ibnutify-YM2x0sANOmuiZZpHhpoXRQ==/lib/arm64/libffmpeg.so
-Step 1: Scrape Spotify metadata...
-Extracted track ID: 1NuvCcuRUGN54bkSLk51LC
-Spotify metadata scraped successfully:
-  Title: Melompat Lebih Tinggi
-  Artist: Lomba Sihir
-  Album: Unknown Album
-  Year: 2026
-  Cover URL: https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273566dc9e464e2daa1b8b542ec
-Step 2: Scrape iTunes metadata helper...
-  iTunes Genre: Pop
-  iTunes Album: Melompat Lebih Tinggi - Single
-Step 3: Fetch lyrics from LRCLIB...
-  Lyrics found.
-  Synced lyrics (.lrc format) found.
-Target output folder: /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single
-  Created target directory.
-FFmpeg configuration:
-  FFmpeg path: /data/app/~~MGbv29BEKAbgwKnKnirV8Q==/com.ibnutify.ibnutify-YM2x0sANOmuiZZpHhpoXRQ==/lib/arm64/libffmpeg.so
-  FFmpeg exists: True
-  use_ffmpeg: True
-  Expected extension: mp3
-  Target filepath: /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.mp3
-Checking if file already exists in download folder...
-Step 4: Configure yt-dlp options...
-Smart Search: Target duration is 221.0s. Searching top 10 results...
-Smart Search: Found best match https://www.youtube.com/watch?v=wxHpJq5P4BM with duration diff 0.0s.
-Configuring yt-dlp with FFmpeg integration for MP3 audio extraction.
-Step 5: Run yt-dlp YoutubeDL.extract_info (attempt 1/3)
-[WARNING] Deprecated Feature: Support for Python version 3.10 has been deprecated. Please update to Python 3.11 or above
-[ERROR] Deprecated Feature: Support for Python version 3.10 has been deprecated. Please update to Python 3.11 or above
-[DEBUG] [youtube] Extracting URL: https://www.youtube.com/watch?v=wxHpJq5P4BM
-[DEBUG] [youtube] wxHpJq5P4BM: Downloading webpage
-[DEBUG] [youtube] wxHpJq5P4BM: Downloading android player API JSON
-[WARNING] [youtube] wxHpJq5P4BM: Some android client https formats have been skipped as they are missing a URL. YouTube may have enabled the SABR-only streaming experiment for the current session. See  https://github.com/yt-dlp/yt-dlp/issues/12482  for more details
-[DEBUG] [info] wxHpJq5P4BM: Downloading 1 format(s): 18
-[DEBUG] [info] Downloading video thumbnail 41 ...
-[DEBUG] [info] Writing video thumbnail 41 to: /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.webp
-[DEBUG] [download] Destination: /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.mp4
-yt-dlp download finished, starting audio post-processing...
-[DEBUG] [ExtractAudio] Destination: /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.mp3
-[DEBUG] Deleting original file /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.mp4 (pass -k to keep)
-[DEBUG] [ThumbnailsConvertor] Converting thumbnail "/storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.webp" to png
-[ERROR] ERROR: Postprocessing: Decoder (codec webp) not found for input stream #0:0
-[WARNING] yt-dlp attempt 1/3 failed: ERROR: Postprocessing: Decoder (codec webp) not found for input stream #0:0
-Traceback (most recent call last):
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3666, in process_info
-    replace_info_dict(self.post_process(dl_filename, info_dict, files_to_move))
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3852, in post_process
-    info = self.run_all_pps('post_process', info, additional_pps=info.get('__postprocessors'))
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3834, in run_all_pps
-    info = self.run_pp(pp, info)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3812, in run_pp
-    files_to_delete, infodict = pp.run(infodict)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/common.py", line 23, in run
-    ret = func(self, info, *args, **kwargs)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/common.py", line 128, in wrapper
-    return func(self, info)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/embedthumbnail.py", line 84, in run
-    thumbnail_filename = convertor.convert_thumbnail(thumbnail_filename, 'png')
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/ffmpeg.py", line 1098, in convert_thumbnail
-    self.real_run_ffmpeg(
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/ffmpeg.py", line 360, in real_run_ffmpeg
-    raise FFmpegPostProcessorError(stderr.strip().splitlines()[-1])
-yt_dlp.postprocessor.ffmpeg.FFmpegPostProcessorError: Decoder (codec webp) not found for input stream #0:0
+# Product Requirement Document (PRD)
 
-During handling of the above exception, another exception occurred:
+## IbnuTify - System Modernization, Bug Fixes, & Feature Enhancements
 
-Traceback (most recent call last):
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/app/downloader.py", line 553, in download_track
-    info = ydl.extract_info(best_youtube_url, download=True)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1720, in extract_info
-    return self.__extract_info(url, self.get_info_extractor(key), download, extra_info, process)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1731, in wrapper
-    return func(self, *args, **kwargs)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1887, in __extract_info
-    return self.process_ie_result(ie_result, download, extra_info)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1946, in process_ie_result
-    ie_result = self.process_video_result(ie_result, download=download)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3134, in process_video_result
-    self.process_info(new_info)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 194, in wrapper
-    return func(self, *args, **kwargs)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3668, in process_info
-    self.report_error(f'Postprocessing: {err}')
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1165, in report_error
-    self.trouble(f'{self._format_err("ERROR:", self.Styles.ERROR)} {message}', *args, **kwargs)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1103, in trouble
-    raise DownloadError(message, exc_info)
-yt_dlp.utils.DownloadError: ERROR: Postprocessing: Decoder (codec webp) not found for input stream #0:0
+**Versi Dokumen:** 3.0.0 (Comprehensive Revision)  
+**Tanggal:** 31 Oktober 2026  
+**Status:** In-Draft / Technical Specification  
+**Pengembang Utama:** Ibnu Sina Sudrajat  
+**Platform Target:** Android (Flutter Cross-Platform Engine)
 
-[Retry] Waiting 2s before next attempt...
-Step 5: Run yt-dlp YoutubeDL.extract_info (attempt 2/3)
-[Retry] Switching player_client order to: ios, android, web
-[WARNING] Deprecated Feature: Support for Python version 3.10 has been deprecated. Please update to Python 3.11 or above
-[ERROR] Deprecated Feature: Support for Python version 3.10 has been deprecated. Please update to Python 3.11 or above
-[DEBUG] [youtube] Extracting URL: https://www.youtube.com/watch?v=wxHpJq5P4BM
-[DEBUG] [youtube] wxHpJq5P4BM: Downloading webpage
-[DEBUG] [youtube] wxHpJq5P4BM: Downloading ios player API JSON
-[DEBUG] [youtube] wxHpJq5P4BM: Downloading android player API JSON
-[WARNING] [youtube] wxHpJq5P4BM: Some ios client https formats have been skipped as they are missing a URL. YouTube may have enabled the SABR-only streaming experiment for the current session. See  https://github.com/yt-dlp/yt-dlp/issues/12482  for more details
-[WARNING] [youtube] wxHpJq5P4BM: Some android client https formats have been skipped as they are missing a URL. YouTube may have enabled the SABR-only streaming experiment for the current session. See  https://github.com/yt-dlp/yt-dlp/issues/12482  for more details
-[DEBUG] [info] wxHpJq5P4BM: Downloading 1 format(s): 18
-[DEBUG] Deleting existing file /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.webp
-[DEBUG] [info] Downloading video thumbnail 41 ...
-[DEBUG] [info] Writing video thumbnail 41 to: /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.webp
-[DEBUG] [download] Destination: /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.mp4
-yt-dlp download finished, starting audio post-processing...
-[DEBUG] [ExtractAudio] Destination: /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.mp3
-[DEBUG] Deleting original file /storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.mp4 (pass -k to keep)
-[DEBUG] [ThumbnailsConvertor] Converting thumbnail "/storage/emulated/0/Download/Ibnutify/Melompat Lebih Tinggi - Single/Melompat Lebih Tinggi.webp" to png
-[ERROR] ERROR: Postprocessing: Decoder (codec webp) not found for input stream #0:0
-[WARNING] yt-dlp attempt 2/3 failed: ERROR: Postprocessing: Decoder (codec webp) not found for input stream #0:0
-Traceback (most recent call last):
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3666, in process_info
-    replace_info_dict(self.post_process(dl_filename, info_dict, files_to_move))
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3852, in post_process
-    info = self.run_all_pps('post_process', info, additional_pps=info.get('__postprocessors'))
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3834, in run_all_pps
-    info = self.run_pp(pp, info)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3812, in run_pp
-    files_to_delete, infodict = pp.run(infodict)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/common.py", line 23, in run
-    ret = func(self, info, *args, **kwargs)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/common.py", line 128, in wrapper
-    return func(self, info)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/embedthumbnail.py", line 84, in run
-    thumbnail_filename = convertor.convert_thumbnail(thumbnail_filename, 'png')
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/ffmpeg.py", line 1098, in convert_thumbnail
-    self.real_run_ffmpeg(
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/postprocessor/ffmpeg.py", line 360, in real_run_ffmpeg
-    raise FFmpegPostProcessorError(stderr.strip().splitlines()[-1])
-yt_dlp.postprocessor.ffmpeg.FFmpegPostProcessorError: Decoder (codec webp) not found for input stream #0:0
+---
 
-During handling of the above exception, another exception occurred:
+## 1. Ringkasan Eksekutif (Executive Summary)
 
-Traceback (most recent call last):
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/app/downloader.py", line 553, in download_track
-    info = ydl.extract_info(best_youtube_url, download=True)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1720, in extract_info
-    return self.__extract_info(url, self.get_info_extractor(key), download, extra_info, process)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1731, in wrapper
-    return func(self, *args, **kwargs)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1887, in __extract_info
-    return self.process_ie_result(ie_result, download, extra_info)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1946, in process_ie_result
-    ie_result = self.process_video_result(ie_result, download=download)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3134, in process_video_result
-    self.process_info(new_info)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 194, in wrapper
-    return func(self, *args, **kwargs)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3668, in process_info
-    self.report_error(f'Postprocessing: {err}')
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1165, in report_error
-    self.trouble(f'{self._format_err("ERROR:", self.Styles.ERROR)} {message}', *args, **kwargs)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1103, in trouble
-    raise DownloadError(message, exc_info)
-yt_dlp.utils.DownloadError: ERROR: Postprocessing: Decoder (codec webp) not found for input stream #0:0
+IbnuTify adalah aplikasi pemutar musik *offline-first* berbasis Flutter yang dilengkapi dengan fitur pengunduh media pintar, analisis Machine Learning lokal, pelacak kebugaran, dan manajemen lirik. 
 
-[Retry] Waiting 4s before next attempt...
-Step 5: Run yt-dlp YoutubeDL.extract_info (attempt 3/3)
-[Retry] Switching player_client order to: tv_embedded, web
-[WARNING] Deprecated Feature: Support for Python version 3.10 has been deprecated. Please update to Python 3.11 or above
-[ERROR] Deprecated Feature: Support for Python version 3.10 has been deprecated. Please update to Python 3.11 or above
-[DEBUG] [youtube] Extracting URL: https://www.youtube.com/watch?v=wxHpJq5P4BM
-[DEBUG] [youtube] wxHpJq5P4BM: Downloading webpage
-[WARNING] [youtube] Skipping unsupported client "tv_embedded"
-[WARNING] Only images are available for download. use --list-formats to see them
-[ERROR] ERROR: [youtube] wxHpJq5P4BM: Requested format is not available. Use --list-formats for a list of available formats
-[WARNING] yt-dlp attempt 3/3 failed: ERROR: [youtube] wxHpJq5P4BM: Requested format is not available. Use --list-formats for a list of available formats
-Traceback (most recent call last):
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1731, in wrapper
-    return func(self, *args, **kwargs)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1887, in __extract_info
-    return self.process_ie_result(ie_result, download, extra_info)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1946, in process_ie_result
-    ie_result = self.process_video_result(ie_result, download=download)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 3096, in process_video_result
-    raise ExtractorError(
-yt_dlp.utils.ExtractorError: [youtube] wxHpJq5P4BM: Requested format is not available. Use --list-formats for a list of available formats
+Dokumen PRD versi 3.0.0 ini menyusun spesifikasi teknis mendalam untuk menyelesaikan seluruh isu krusial yang ditemukan pada pengujian versi lapangan:
+1. **Kegagalan Pelacakan Olahraga (Workout Tracking Standstill):** Penanganan stream error recovery GPS/Sensor dan pemulihan Isolate background.
+2. **Notifikasi Media Android (MIUI Xiaomi Specific Bug):** Penanganan logo hitam monokrom, gambar album *null URI*, dan freeze progress bar.
+3. **Visual Lirik & Interaksi Sync:** Penyusutan font preview, penghapusan spasi raksasa/footer "Akhir lirik", serta pemulihan logika tombol *Sync*.
+4. **Manajemen Profil Pengguna:** Pemisahan View Mode vs Edit Mode (hilangnya tombol simpan permanen).
+5. **Kontrol Sistem Pemutaran & Bluetooth:** Sleep Timer di Release Mode, auto-pause saat TWS terputus, dan pemulihan state pemutaran tanpa auto-play.
 
-During handling of the above exception, another exception occurred:
+---
 
-Traceback (most recent call last):
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/app/downloader.py", line 553, in download_track
-    info = ydl.extract_info(best_youtube_url, download=True)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1720, in extract_info
-    return self.__extract_info(url, self.get_info_extractor(key), download, extra_info, process)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1749, in wrapper
-    self.report_error(str(e), e.format_traceback())
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1165, in report_error
-    self.trouble(f'{self._format_err("ERROR:", self.Styles.ERROR)} {message}', *args, **kwargs)
-  File "/data/data/com.ibnutify.ibnutify/files/chaquopy/AssetFinder/requirements/yt_dlp/YoutubeDL.py", line 1103, in trouble
-    raise DownloadError(message, exc_info)
-yt_dlp.utils.DownloadError: ERROR: [youtube] wxHpJq5P4BM: Requested format is not available. Use --list-formats for a list of available formats
+## 2. Gambaran Umum Sistem & Arsitektur (System Architecture)
 
-[ERROR] All 3 yt-dlp attempts failed.
-Download gagal setelah 3 percobaan: ERROR: [youtube] wxHpJq5P4BM: Requested format is not available. Use --list-formats for a list of available formats
+Sistem IbnuTify dibangun atas arsitektur **Clean Architecture + MVVM** menggunakan *state management* `flutter_riverpod`.
+
+```
+[ UI Layer (Screens / Widgets / MediaNotification) ]
+                         │
+                         ▼
+     [ ViewModel Layer (Riverpod Notifiers) ]
+                         │
+      ┌──────────────────┼────────────────────────┬────────────────────────┐
+      ▼                  ▼                        ▼                        ▼
+[ Audio Engine ]   [ Local Storage ]   [ Background Services ]   [ Native Android Bridge ]
+(just_audio /      (SQLite / Cache /   (Chaquopy / Foreground    (MethodChannel / Kotlin /
+ audio_service)     SharedPreferences)   Task Isolate)            MIUI Notifications)
+```
+
+---
+
+## 3. Spesifikasi Fitur & Perbaikan Detail (Detailed Requirements)
+
+### EPIC 1: Pengunduh Media & Integrasi UI (Media Downloader Engine)
+
+| ID | Modul / Fitur | Deskripsi Masalah | Spesifikasi Perbaikan & Solusi Teknis | Kriteria Penerimaan (Acceptance Criteria) |
+| :--- | :--- | :--- | :--- | :--- |
+| **REQ-1.1** | Atomic Download Engine | Unduhan sering gagal/gantung di pertengahan kompresi Python, tetapi berkas mentah sudah terbentuk sehingga memicu *conflict* saat diulang. | Implementasikan *atomic file writing* pada skrip Python (`yt-dlp`). Berkas diunduh sebagai `.tmp`. Hanya di-rename menjadi `.mp3` jika proses pengunduhan, kompresi, dan metadata selesai 100%. | Berkas `.mp3` hanya tersimpan di direktori lokal jika unduhan sukses 100%. Tidak ada berkas *corrupt* tersisa saat error. |
+| **REQ-1.2** | Real-Time Progress & Cover UI | UI pengunduhan hanya menampilkan indikator berputar tanpa persentase, estimasi sisa waktu, atau cover album (`image_7de57e.png`). Teks masih "ETA". | 1. Pancarkan data persentase (%), URL cover art, dan detik sisa via `MethodChannel` stream.<br>2. Ganti teks "ETA" menjadi **"Sisa Waktu"**.<br>3. Tampilkan gambar cover art secara real-time di UI obrolan unduhan. | UI menampilkan *progress bar* presisi (%), estimasi "Sisa Waktu", dan gambar *cover album* lagu yang sedang diproses. |
+| **REQ-1.3** | State Obrolan & Tombol Pembatalan | Pesan input tautan pengguna langsung lenyap dari bubble obrolan dan tidak bisa dibatalkan. | 1. Panggil `addMessage(userMessage)` sebelum memicu unduhan.<br>2. Ubah indikator berputar menjadi **Tombol Batal/Pause (X)** yang memicu *Cancellation Token* ke skrip Python. | Teks tautan pengguna tetap tampil dalam bubble chat. Pengguna dapat menghentikan unduhan kapan saja via tombol Batal. |
+| **REQ-1.4** | Fallback Cover Embedding | Beberapa lagu hasil unduhan memiliki cover art kosong. | Jika penyematan `--embed-thumbnail` di Python gagal, panggil `AlbumArtService` di Flutter untuk mengambil gambar via CDN dan simpan sebagai berkas `.jpg` di direktori `Download/Ibnutify/`. | Setiap lagu yang diunduh memiliki *artwork* album yang valid di SQLite dan direktori lokal. |
+
+---
+
+### EPIC 2: Pelacak Olahraga (Workout Tracking & Sensor Fusion)
+
+Formula kalkulasi jarak menggunakan persamaan **Haversine**:
+
+$$
+d = 2r \arcsin \left( \sqrt{\sin^2\left(\frac{\Delta \phi}{2}\right) + \cos(\phi_1)\cos(\phi_2)\sin^2\left(\frac{\Delta \lambda}{2}\right)} \right)
+$$
+
+| ID | Modul / Fitur | Deskripsi Masalah | Spesifikasi Perbaikan & Solusi Teknis | Kriteria Penerimaan (Acceptance Criteria) |
+| :--- | :--- | :--- | :--- | :--- |
+| **REQ-2.1** | GPS Tracking & Haversine Stream Fix | Tracking terhenti setelah 2 detik (`image_7de8a4.jpg`, `image_7de881.png`). Waktu berjalan, namun KM, Pace, SPM, Kalori tertahan di `0`. | 1. Turunkan `distanceFilter` GPS menjadi 2 meter.<br>2. Bungkus stream `Geolocator` dan `Pedometer` dengan error recovery handler (`onError` retry logic) agar lonjakan koordinat invalid tidak mematikan stream.<br>3. Eksekusi rumus Haversine berurutan saat jumlah titik GPS $\ge 2$. | Jarak (KM), Pace, SPM, Kalori, dan rute peta bergerak secara kontinyu seiring pergerakan pengguna. |
+| **REQ-2.2** | Foreground Isolate Heartbeat | Service mati/freeze saat HP dalam saku atau layar mati (Doze Mode). | 1. Tambahkan izin `ACCESS_BACKGROUND_LOCATION`.<br>2. Pasang `WakelockPlus` pada `WorkoutTaskHandler`.<br>3. Buat mekanisasi *Heartbeat Timer* (1 detik) di dalam Isolate untuk terus memancarkan payload data ke Main UI Isolate. | Pelacakan olahraga tetap berjalan akurat 100% meskipun perangkat dikunci/diberhentikan di saku selama berjam-jam. |
+| **REQ-2.3** | Activity Recognition & Pedometer | Langkah (Step), SPM, dan Kalori bernilai `0`. | Minta izin runtime `android.permission.ACTIVITY_RECOGNITION`. Hubungkan sensor accelerometer internal untuk mendeteksi puncak gelombang langkah (*step peak detection*). | Metrik Langkah, SPM, dan perkiraan Kalori terhitung secara *real-time*. |
+
+---
+
+### EPIC 3: Notifikasi Media Pemutaran (Android & MIUI Specifics)
+
+| ID | Modul / Fitur | Deskripsi Masalah | Spesifikasi Perbaikan & Solusi Teknis | Kriteria Penerimaan (Acceptance Criteria) |
+| :--- | :--- | :--- | :--- | :--- |
+| **REQ-3.1** | MIUI Small Notification Icon | Logo ikon aplikasi di baris notifikasi berupa kotak hitam murni (`image_7de923.png`). | Buat resource Android native `ic_stat_music.png` (PNG vector monokrom putih dengan transparansi Alpha) untuk `notificationChannel`. MIUI mewajibkan format ini untuk small icon. | Baris status notifikasi OS menampilkan logo ikon aplikasi yang jernih dan putih transparan (tidak hitam). |
+| **REQ-3.2** | Notification Artwork & Blank State | Notifikasi kadang muncul sebagai bar putih kosong ("Not playing") atau tanpa cover art (`image_7dec23.png`, `image_7de923.png`). | Pada `IbnuTifyAudioHandler`, jika lagu tidak memiliki URI artwork eksternal (byte buffer ID3), ekspor byte gambar tersebut secara temporer sebagai berkas `file:///...` dan pasang URI lokal tersebut ke `MediaItem.artUri`. | Panel notifikasi OS selalu menampilkan cover art album dan informasi judul/artis lagu yang sedang diputar. |
+| **REQ-3.3** | Background Seek Bar Progress | Progress bar notifikasi berhenti bergerak saat aplikasi berada di *recent apps* / background. | Pancarkan (*broadcast*) `PlaybackStateCompat` dari `audio_service` secara berkala dengan menyertakan variabel `position`, `playbackSpeed`, dan `updateTime`. | *Progress bar* pada bar notifikasi OS terus berjalan mulus meskipun aplikasi berada di latar belakang. |
+
+---
+
+### EPIC 4: Layar Lirik, Visual Formatting, & Interaksi Sync
+
+| ID | Modul / Fitur | Deskripsi Masalah | Spesifikasi Perbaikan & Solusi Teknis | Kriteria Penerimaan (Acceptance Criteria) |
+| :--- | :--- | :--- | :--- | :--- |
+| **REQ-4.1** | PlayerScreen Lyric Preview Styling | Font lirik aktif pada card preview di `PlayerScreen` terlalu besar sehingga menutupi/memotong baris lirik sekitarnya (`image_7de522.jpg`). | Kecilkan `fontSize` lirik aktif pada preview card, tambahkan properti `maxLines: 2` dan `overflow: TextOverflow.ellipsis` agar layout konsisten dan rapi. | Baris lirik preview tampil rapi tanpa menutupi atau memotong baris lirik di atas/bawahnya. |
+| **REQ-4.2** | LyricsScreen Layout Clean-up | Terdapat ruang kosong raksasa di bagian bawah `LyricsScreen` dan terdapat pemisah teks "Akhir lirik" (`image_7de8e4.png`, `image_7de57e.png`). | 1. Hapus total widget `Divider` + `Text("Akhir lirik")`.<br>2. Kurangi padding/SizedBox bagian bawah `ListView.builder` dari 300px menjadi `height: 40`. | Tampilan lirik bersih hingga baris terakhir tanpa spasi kosong berlebihan dan tanpa teks "Akhir lirik". |
+| **REQ-4.3** | Sync Button Jump Logic | Tombol chip `Sync` (`image_7de55b.png`) tidak dapat mengembalikan/menggulirkan layar ke baris lirik yang sedang aktif saat diklik. | Ketika tombol `Sync` diklik:<br>1. Setel variabel `userIsScrolling = false`.<br>2. Panggil `itemScrollController.scrollTo(index: activeIndex, duration: Duration(milliseconds: 300))`.<br>3. Jika baris lirik diklik langsung, jalankan `audioHandler.seek(line.timestamp)`. | Mengetuk tombol `Sync` langsung menggulirkan layar kembali ke baris lirik aktif dan mengaktifkan kembali *auto-scroll*. |
+| **REQ-4.4** | Local Lyrics Caching | Lirik diunduh ulang dari internet setiap kali lagu diputar (pemborosan kuota). | Lakukan kueri SQLite `SELECT lyrics FROM songs WHERE uri = ?` sebelum memanggil `LyricsApiService`. Simpan lirik hasil unduhan pertama ke DB/berkas `.lrc`. | Lirik hanya diunduh **1 kali**, dan selanjutnya dibaca 100% secara *offline*. |
+
+---
+
+### EPIC 5: Profil Pengguna, Riwayat, & Branding Developer
+
+#### 5.1 Layar Profil Pengguna (`UserProfileScreen`)
+* **State Management:** Implementasikan variabel state `bool isEditing = false`.
+* **View Mode (`isEditing == false`):** Tampilkan kartu detail profil yang rapi (Nama, Umur, Genre Favorit). **Sembunyikan tombol "Simpan Data"** dan gantikan dengan tombol **"Edit Profil"** (atau panggil modal edit).
+* **Edit Mode (`isEditing == true`):** Tampilkan form input dan tombol **"Simpan Data"**. Setelah disimpan, otomatis beralih kembali ke View Mode.
+* **Developer Watermark (Bagian Bawah Screen):**
+  * **Foto Profil Pengembang:** Dimuat dari URL `https://ibnusinasudrajat.netlify.app/assets/img/ibnu.png`.
+  * **Teks Hak Cipta:** *"Aplikasi dibuat oleh Ibnu Sina Sudrajat"*.
+  * **Interaksi Klik:** Mengklik watermark akan membuka URL `https://ibnusinasudrajat.netlify.app/` di browser eksternal via `url_launcher` (`LaunchMode.externalApplication`).
+
+```
+┌───────────────────────────────────────────┐
+│              PROFIL PENGGUNA              │
+├───────────────────────────────────────────┤
+│ [Card: Info User (Nama, Umur, Genre)]    │
+│                                           │
+│ [ TOMBOL: EDIT PROFIL ]                   │
+│                                           │
+│ ───────────────────────────────────────── │
+│ ┌───────────────────────────────────────┐ │
+│ │ (Foto) Aplikasi dibuat oleh          │ │
+│ │        Ibnu Sina Sudrajat             │ │
+│ └───────────────────────────────────────┘ │
+└───────────────────────────────────────────┘
+```
+
+#### 5.2 Tombol Riwayat Pemutaran (History Routing)
+* **Aksi Navigasi:** Hubungkan *callback* `onPressed` pada ikon jam/riwayat di bagian header kanan atas `HomeScreen` (`_M3TopBar`) menuju `ListeningHistoryScreen` / `RecentlyPlayedScreen`.
+
+---
+
+### EPIC 6: Kontrol Pemutaran & Perangkat Nirkabel (Playback & Controls)
+
+| ID | Modul / Fitur | Deskripsi Masalah | Spesifikasi Perbaikan & Solusi Teknis | Kriteria Penerimaan (Acceptance Criteria) |
+| :--- | :--- | :--- | :--- | :--- |
+| **REQ-6.1** | Sleep Timer Release Mode Fix | Fitur Mode Tidur tidak mematikan aplikasi pada build Release. | Buat pemanggilan native Android via MethodChannel khusus (`closeAppDeeper`) yang mengeksekusi `finishAndRemoveTask()` atau `exitProcess(0)` dari sisi Kotlin. | Mode tidur mematikan aplikasi dan membebaskan foreground service secara total pada Release Mode. |
+| **REQ-6.2** | Bluetooth TWS Auto-Resume Guard | Ketika koneksi TWS/Bluetooth terputus, lagu memutar sendiri via speaker ponsel. | Konfigurasikan receiver `AudioManager.ACTION_AUDIO_BECOMING_NOISY` di Android native / `audio_service`. Paksa pemanggilan `pause()` dan hapus flag auto-resume saat TWS disconnect. | Pemutaran lagu berhenti seketika saat TWS dimatikan dan TIDAK memutar sendiri melalui speaker HP. |
+| **REQ-6.3** | Restore Last Played State | Saat aplikasi dibuka kembali, lagu langsung *auto-play* secara mendadak. | Modifikasi logika pemulihan state di `IbnuTifyAudioHandler` & `playerProvider`. Muat lagu dan antrean terakhir dalam kondisi **Strictly Paused** (hanya tampil di MiniPlayer bawah). | Aplikasi memuat lagu terakhir di MiniPlayer bawah tanpa memutar suara secara otomatis. |
+| **REQ-6.4** | Smart Shuffle Default | Pemutaran lagu awal masih bersifat linier. | Aktifkan Smart Shuffle sebagai default mode di `playerProvider`. Panggil `computeSmartShuffleIndices` secara otomatis saat pengguna memulai lagu. | Setiap pemutaran daftar lagu secara default terurut menggunakan algoritma Smart Shuffle. |
+
+---
+
+## 4. Matriks Validasi & Kriteria Pengujian Debugging (QA Matrix)
+
+```
+[Sesi Debugging Final & QA]
+├── 1. Test Workout Stream    --> Lari outdoor / gerakkan HP selama 5+ menit dengan layar mati.
+├── 2. Test MIUI Notification --> Cek bar notifikasi Xiaomi: ikon putih transparan & progress bar bergerak.
+├── 3. Test Lyric Sync & UI   --> Klik Sync saat lirik tergeser jauh; cek ukuran font preview & footer space.
+├── 4. Test Profile State     --> Simpan data profil; pastikan tombol "Simpan Data" berubah jadi View Mode.
+└── 5. Test TWS & Sleep Timer --> Matikan TWS saat play; aktifkan sleep timer pada APK Release Mode.
+```
+
+*Dokumen PRD ini telah direvisi secara komprehensif dan disetujui untuk diimplementasikan secara langsung pada codebase IbnuTify.*

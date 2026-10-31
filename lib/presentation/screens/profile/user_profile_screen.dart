@@ -19,6 +19,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   String _selectedGenre = 'Pop';
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isEditing = false; // [REQ-5.1] View Mode vs Edit Mode toggle
 
   final List<String> _genres = const [
     'Pop',
@@ -70,7 +71,10 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     await prefs.setInt('user_profile_age', ageInt);
     await prefs.setString('user_profile_genre', _selectedGenre);
 
-    setState(() => _isSaving = false);
+    setState(() {
+      _isSaving = false;
+      _isEditing = false;
+    });
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -128,140 +132,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ── Form Profil ───────────────────────────────────────────
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withOpacity(0.06)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Nama Pengguna',
-                          style: TextStyle(
-                            color: AppColors.onSurfaceVariant,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _nameController,
-                          style: const TextStyle(color: AppColors.onSurface, fontSize: 15),
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: AppColors.surfaceContainerLow,
-                            hintText: 'Masukkan nama Anda...',
-                            hintStyle: const TextStyle(color: AppColors.onSurfaceVariant),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        const Text(
-                          'Umur (Tahun)',
-                          style: TextStyle(
-                            color: AppColors.onSurfaceVariant,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _ageController,
-                          keyboardType: TextInputType.number,
-                          style: const TextStyle(color: AppColors.onSurface, fontSize: 15),
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: AppColors.surfaceContainerLow,
-                            hintText: '22',
-                            hintStyle: const TextStyle(color: AppColors.onSurfaceVariant),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        const Text(
-                          'Genre Musik Favorit',
-                          style: TextStyle(
-                            color: AppColors.onSurfaceVariant,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: _selectedGenre,
-                              isExpanded: true,
-                              dropdownColor: AppColors.surfaceContainerHigh,
-                              icon: const Icon(Icons.arrow_drop_down, color: AppColors.onSurface),
-                              items: _genres.map((g) {
-                                return DropdownMenuItem(
-                                  value: g,
-                                  child: Text(
-                                    g,
-                                    style: const TextStyle(color: AppColors.onSurface, fontSize: 15),
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (val) {
-                                if (val != null) setState(() => _selectedGenre = val);
-                              },
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: ElevatedButton(
-                            onPressed: _isSaving ? null : _saveProfileData,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: const Color(0xFF003914),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(24),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: _isSaving
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Color(0xFF003914),
-                                    ),
-                                  )
-                                : const Text(
-                                    'SIMPAN DATA',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 14,
-                                      letterSpacing: 0.8,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  // ── Profil Card (View Mode vs Edit Mode) [REQ-5.1] ────────
+                  _isEditing ? _buildEditMode() : _buildViewMode(),
 
                   const SizedBox(height: 36),
                   const Divider(color: Colors.white12),
@@ -360,6 +232,290 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildViewMode() {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primary.withOpacity(0.15),
+                  border: Border.all(color: AppColors.primary.withOpacity(0.4), width: 1.5),
+                ),
+                child: const Icon(Icons.person_rounded, color: AppColors.primary, size: 26),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _nameController.text.isEmpty ? 'Ibnu Sina' : _nameController.text,
+                      style: const TextStyle(
+                        color: AppColors.onSurface,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${_ageController.text} Tahun • $_selectedGenre',
+                      style: const TextStyle(
+                        color: AppColors.onSurfaceVariant,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          const Divider(color: Colors.white10),
+          const SizedBox(height: 14),
+          _buildInfoRow(Icons.badge_outlined, 'Nama Lengkap', _nameController.text.isEmpty ? 'Ibnu Sina' : _nameController.text),
+          const SizedBox(height: 14),
+          _buildInfoRow(Icons.cake_outlined, 'Umur Pengguna', '${_ageController.text} Tahun'),
+          const SizedBox(height: 14),
+          _buildInfoRow(Icons.music_note_rounded, 'Genre Favorit', _selectedGenre),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.edit_rounded, size: 18),
+              label: const Text(
+                'EDIT PROFIL',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: const Color(0xFF003914),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                elevation: 0,
+              ),
+              onPressed: () => setState(() => _isEditing = true),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: AppColors.onSurfaceVariant),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.onSurfaceVariant,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: const TextStyle(
+                color: AppColors.onSurface,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEditMode() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Nama Pengguna',
+            style: TextStyle(
+              color: AppColors.onSurfaceVariant,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _nameController,
+            style: const TextStyle(color: AppColors.onSurface, fontSize: 15),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: AppColors.surfaceContainerLow,
+              hintText: 'Masukkan nama Anda...',
+              hintStyle: const TextStyle(color: AppColors.onSurfaceVariant),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'Umur (Tahun)',
+            style: TextStyle(
+              color: AppColors.onSurfaceVariant,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _ageController,
+            keyboardType: TextInputType.number,
+            style: const TextStyle(color: AppColors.onSurface, fontSize: 15),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: AppColors.surfaceContainerLow,
+              hintText: '22',
+              hintStyle: const TextStyle(color: AppColors.onSurfaceVariant),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'Genre Musik Favorit',
+            style: TextStyle(
+              color: AppColors.onSurfaceVariant,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _selectedGenre,
+                isExpanded: true,
+                dropdownColor: AppColors.surfaceContainerHigh,
+                icon: const Icon(Icons.arrow_drop_down, color: AppColors.onSurface),
+                items: _genres.map((g) {
+                  return DropdownMenuItem(
+                    value: g,
+                    child: Text(
+                      g,
+                      style: const TextStyle(color: AppColors.onSurface, fontSize: 15),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) setState(() => _selectedGenre = val);
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 48,
+                  child: OutlinedButton(
+                    onPressed: () => setState(() => _isEditing = false),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.onSurfaceVariant,
+                      side: BorderSide(color: Colors.white.withOpacity(0.15)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                    child: const Text(
+                      'BATAL',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: SizedBox(
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: _isSaving ? null : _saveProfileData,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: const Color(0xFF003914),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFF003914),
+                            ),
+                          )
+                        : const Text(
+                            'SIMPAN DATA',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
