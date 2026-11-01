@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import '../../../data/datasources/gemini_datasource.dart';
 import '../../../data/models/song_model.dart';
 import '../../providers/app_providers.dart';
 import '../../widgets/common/song_artwork_widget.dart';
+import '../player/player_screen.dart';
 import '../../../services/download_service.dart';
 import '../../../services/chat_history_service.dart';
 
@@ -136,6 +138,9 @@ class _AIMoodsScreenState extends ConsumerState<AIMoodsScreen>
       _isHeroVisible = true;
       _currentGreeting = _greetings[math.Random().nextInt(_greetings.length)];
     });
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
   }
 
   void _loadSession(ChatSession session) {
@@ -1306,6 +1311,98 @@ class _DownloadRichCard extends ConsumerWidget {
     );
   }
 
+  Future<void> _handlePlayDownloaded(BuildContext context, WidgetRef ref) async {
+    // 1. Rescan library agar file yang baru saja diunduh terindeks ke SQLite
+    await ref.read(songsProvider.notifier).scanDeviceSongs();
+    final allSongs = ref.read(songsProvider).value ?? [];
+    if (allSongs.isEmpty) return;
+
+    if (message.isPlaylist) {
+      final playlists = ref.read(playlistsProvider).value ?? [];
+      PlaylistModel? targetPlaylist;
+      if (message.playlistId != null) {
+        targetPlaylist = playlists.where((p) => p.id == message.playlistId).firstOrNull;
+      }
+      if (targetPlaylist == null && message.targetTitle != null) {
+        targetPlaylist = playlists.where((p) =>
+            p.name.trim().toLowerCase() == message.targetTitle!.trim().toLowerCase()).firstOrNull;
+      }
+
+      List<SongModel> playlistSongs = [];
+      if (targetPlaylist != null && targetPlaylist.songIds.isNotEmpty) {
+        playlistSongs = allSongs.where((s) => targetPlaylist!.songIds.contains(s.id)).toList();
+      }
+
+      // Fallback pencarian songs jika songIds belum terhubung
+      if (playlistSongs.isEmpty) {
+        final folderName = message.downloadedPlaylistFolder != null
+            ? message.downloadedPlaylistFolder!.split(Platform.pathSeparator).last
+            : (message.targetTitle ?? '');
+
+        playlistSongs = allSongs.where((s) {
+          if (s.uri.isNotEmpty && folderName.isNotEmpty && s.uri.contains(folderName)) return true;
+          if (message.targetTitle != null && s.album.toLowerCase().contains(message.targetTitle!.toLowerCase())) return true;
+          return false;
+        }).toList();
+      }
+
+      if (playlistSongs.isEmpty) {
+        playlistSongs = allSongs.take(10).toList();
+      }
+
+      final playlistTitle = targetPlaylist?.name ?? (message.targetTitle ?? 'Downloaded Playlist');
+
+      await ref.read(playerProvider.notifier).playPlaylist(
+        playlistSongs,
+        playlistName: playlistTitle,
+      );
+
+      if (context.mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => PlaylistDetailScreen(
+              title: playlistTitle,
+              description: targetPlaylist?.description ?? 'Diunduh dari Spotify',
+              initialSongs: playlistSongs,
+              playlistId: targetPlaylist?.id ?? 'downloaded_playlist',
+            ),
+          ),
+        );
+      }
+      return;
+    } else {
+      SongModel? foundSong;
+      if (message.downloadedFilePath != null && message.downloadedFilePath!.isNotEmpty) {
+        foundSong = allSongs.where((s) => s.uri.contains(message.downloadedFilePath!) || message.downloadedFilePath!.contains(s.title)).firstOrNull;
+      }
+      if (foundSong == null && message.targetTitle != null) {
+        final titleQuery = message.targetTitle!.toLowerCase();
+        foundSong = allSongs.where((s) => s.title.toLowerCase().contains(titleQuery)).firstOrNull;
+      }
+      foundSong ??= allSongs.lastOrNull;
+
+      if (foundSong != null) {
+        await ref.read(playerProvider.notifier).playSong(foundSong, [foundSong]);
+      }
+    }
+
+    if (context.mounted) {
+      Navigator.of(context).push(
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => const PlayerScreen(),
+          transitionsBuilder: (_, animation, __, child) => SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 1),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+            child: child,
+          ),
+          transitionDuration: const Duration(milliseconds: 350),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final progress = message.progress;
@@ -1549,10 +1646,10 @@ class _DownloadRichCard extends ConsumerWidget {
             Row(
               children: [
                 _CardActionButton(
-                  label: 'Lihat Library',
-                  icon: Icons.library_music_rounded,
+                  label: 'Lihat Library & Putar',
+                  icon: Icons.play_circle_fill_rounded,
                   isPrimary: true,
-                  onTap: () {},
+                  onTap: () => _handlePlayDownloaded(context, ref),
                 ),
               ],
             ),
@@ -1570,47 +1667,7 @@ class _DownloadRichCard extends ConsumerWidget {
                   onTap: () =>
                       ref.read(downloadProvider.notifier).retryLastDownload(),
                 ),
-                const SizedBox(width: 8),
-                _CardActionButton(
-                  label: 'Log Debug',
-                  icon: Icons.bug_report_rounded,
-                  isPrimary: false,
-                  onTap: () => _showDebugLogsSheet(context),
-                ),
               ],
-            ),
-          ],
-
-          // Debug button selalu tersedia saat progress aktif
-          if (message.isProgress) ...[
-            const SizedBox(height: 12),
-            GestureDetector(
-              onTap: () => _showDebugLogsSheet(context),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.bug_report_rounded,
-                        size: 13, color: AppColors.primary),
-                    SizedBox(width: 6),
-                    Text(
-                      'Lihat Log Debug',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ),
           ],
         ],
@@ -1893,140 +1950,7 @@ class _PlaylistCard extends ConsumerWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SUGGESTION BAR — chip-chip mood (dipertahankan, fungsional)
-// ─────────────────────────────────────────────────────────────────────────────
 
-class _SuggestionBar extends StatelessWidget {
-  final ValueChanged<String> onTap;
-  const _SuggestionBar({super.key, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final chips = [
-      (Icons.download_rounded, 'Download Music', '__download__'),
-      (Icons.code_rounded, 'Stres ngoding', 'Stres ngoding'),
-      (Icons.menu_book_rounded, 'Semangat belajar', 'Semangat belajar'),
-      (Icons.weekend_rounded, 'Santai weekend', 'Santai weekend'),
-      (Icons.water_drop_rounded, 'Hujan melamun', 'Hujan melamun'),
-      (Icons.heart_broken_rounded, 'Lagi galau', 'Lagi galau'),
-      (Icons.local_fire_department_rounded, 'Hype banget', 'Hype banget'),
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Row(
-          children: chips.map((c) {
-            final isDownload = c.$3 == '__download__';
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: _SuggestionChip(
-                icon: c.$1,
-                label: c.$2,
-                isDownload: isDownload,
-                onTap: () => onTap(c.$3),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-}
-
-class _SuggestionChip extends StatefulWidget {
-  final IconData icon;
-  final String label;
-  final bool isDownload;
-  final VoidCallback onTap;
-  const _SuggestionChip({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.isDownload = false,
-  });
-
-  @override
-  State<_SuggestionChip> createState() => _SuggestionChipState();
-}
-
-class _SuggestionChipState extends State<_SuggestionChip>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 100),
-        lowerBound: 0.93,
-        upperBound: 1.0,
-        value: 1.0);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: _ctrl,
-      child: GestureDetector(
-        onTapDown: (_) => _ctrl.reverse(),
-        onTapUp: (_) {
-          _ctrl.forward();
-          widget.onTap();
-        },
-        onTapCancel: () => _ctrl.forward(),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          decoration: BoxDecoration(
-            color: widget.isDownload
-                ? AppColors.primary.withOpacity(0.15)
-                : AppColors.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: widget.isDownload
-                  ? AppColors.primary.withOpacity(0.6)
-                  : AppColors.primary.withOpacity(0.2),
-              width: widget.isDownload ? 1.5 : 1,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                widget.icon,
-                size: 14,
-                color: widget.isDownload
-                    ? AppColors.primary
-                    : AppColors.onSurfaceVariant,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                widget.label,
-                style: TextStyle(
-                  color: widget.isDownload
-                      ? AppColors.primary
-                      : AppColors.onSurface,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FLUID INPUT BAR — pill-shaped, fixed bottom seperti HTML `.input-area`
@@ -2259,185 +2183,5 @@ class _RichDownloadText extends StatelessWidget {
     }
 
     return RichText(text: TextSpan(children: spans));
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DEBUG LOGS SHEET
-// ─────────────────────────────────────────────────────────────────────────────
-
-void _showDebugLogsSheet(BuildContext context) {
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (context) => const _DebugLogsSheet(),
-  );
-}
-
-class _DebugLogsSheet extends StatefulWidget {
-  const _DebugLogsSheet();
-  @override
-  State<_DebugLogsSheet> createState() => _DebugLogsSheetState();
-}
-
-class _DebugLogsSheetState extends State<_DebugLogsSheet> {
-  String _logText = 'Memuat log...';
-  bool _isLoading = true;
-  final ScrollController _scrollCtrl = ScrollController();
-
-  @override
-  void initState() {
-    super.initState();
-    _loadLogs();
-  }
-
-  @override
-  void dispose() {
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadLogs() async {
-    setState(() => _isLoading = true);
-    final logs = await DownloadService.instance.getDownloadLog();
-    if (mounted) {
-      setState(() {
-        _logText = logs;
-        _isLoading = false;
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollCtrl.hasClients) {
-          _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
-        }
-      });
-    }
-  }
-
-  void _copyToClipboard() {
-    Clipboard.setData(ClipboardData(text: _logText)).then((_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Log berhasil disalin ke clipboard!'),
-            backgroundColor: AppColors.primary,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF121212),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      height: MediaQuery.of(context).size.height * 0.8,
-      child: Column(
-        children: [
-          Center(
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 12),
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Download Debug Logs',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        'Detail log proses download & error yt-dlp',
-                        style: TextStyle(
-                            color: Colors.white.withOpacity(0.5),
-                            fontSize: 11),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: _isLoading ? null : _loadLogs,
-                  icon: _isLoading
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.refresh_rounded, color: Colors.white),
-                ),
-                IconButton(
-                  onPressed: _copyToClipboard,
-                  icon: const Icon(Icons.copy_all_rounded,
-                      color: AppColors.primary),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close_rounded, color: Colors.white),
-                ),
-              ],
-            ),
-          ),
-          const Divider(color: Colors.white10, height: 1),
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF070707),
-                borderRadius: BorderRadius.circular(16),
-                border:
-                    Border.all(color: Colors.white.withOpacity(0.05)),
-              ),
-              child: _isLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                          color: AppColors.primary))
-                  : SingleChildScrollView(
-                      controller: _scrollCtrl,
-                      child: SelectionArea(
-                        child: Align(
-                          alignment: Alignment.topLeft,
-                          child: Text(
-                            _logText.isEmpty
-                                ? 'Belum ada log yang tercatat.'
-                                : _logText,
-                            style: TextStyle(
-                              color: _logText.contains('[ERROR]')
-                                  ? Colors.red[300]
-                                  : Colors.green[300],
-                              fontFamily: 'monospace',
-                              fontSize: 11.5,
-                              height: 1.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

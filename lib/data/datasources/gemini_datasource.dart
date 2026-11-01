@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../core/constants/app_constants.dart';
 import '../models/song_model.dart';
@@ -131,25 +132,43 @@ Kembalikan HANYA dalam format JSON berikut (tanpa teks lain):
 
     Exception? lastError;
 
-    // ── Tier 1: Gemini ───────────────────────────────────────────────────────
+    // ── Tier 1: Gemini Primary Model ────────────────────────────────────────
     if (apiKey.isNotEmpty) {
       try {
-        final result = await _tryGemini(systemPrompt, userPrompt);
+        debugPrint('[AI Router] [Tier 1] Mencoba Gemini Primary (${AppConstants.geminiModel})...');
+        final result = await _tryGemini(systemPrompt, userPrompt, model: AppConstants.geminiModel);
+        debugPrint('[AI Router] [Tier 1] Sukses dari Gemini Primary!');
         return _buildMessage(result, localSongs);
       } catch (e) {
+        debugPrint('[AI Router] [Tier 1 FAIL] Error: $e');
+        lastError = e is Exception ? e : Exception(e.toString());
+      }
+
+      // ── Tier 2: Gemini Secondary / Fallback Model ──────────────────────────
+      try {
+        debugPrint('[AI Router] [Tier 2] Mencoba Gemini Secondary (${AppConstants.geminiFallbackModel})...');
+        final result = await _tryGemini(systemPrompt, userPrompt, model: AppConstants.geminiFallbackModel);
+        debugPrint('[AI Router] [Tier 2] Sukses dari Gemini Secondary!');
+        return _buildMessage(result, localSongs);
+      } catch (e) {
+        debugPrint('[AI Router] [Tier 2 FAIL] Error: $e');
         lastError = e is Exception ? e : Exception(e.toString());
       }
     }
 
-    // ── Tier 2: OpenRouter (model rotation) ─────────────────────────────────
+    // ── Tier 3: OpenRouter (model rotation) ─────────────────────────────────
     try {
+      debugPrint('[AI Router] [Tier 3] Mencoba OpenRouter Failover...');
       final result = await _tryOpenRouter(systemPrompt, userPrompt);
+      debugPrint('[AI Router] [Tier 3] Sukses dari OpenRouter!');
       return _buildMessage(result, localSongs);
     } catch (e) {
+      debugPrint('[AI Router] [Tier 3 FAIL] Error: $e');
       lastError = e is Exception ? e : Exception(e.toString());
     }
 
-    // ── Tier 3: Intelligent Offline Fallback (100% Seamless) ────────────────
+    // ── Tier 4: Intelligent Offline Fallback (100% Seamless) ────────────────
+    debugPrint('[AI Router] [Tier 4] Semua API eksternal gagal (lastError: $lastError). Menggunakan Local Heuristic Fallback.');
     return _buildOfflineFallback(userInput, localSongs);
   }
 
@@ -185,11 +204,15 @@ Kembalikan HANYA dalam format JSON berikut (tanpa teks lain):
     );
   }
 
-  // ── Tier 1: Gemini implementation ─────────────────────────────────────────
+  // ── Tier 1 & 2: Gemini implementation ─────────────────────────────────────
 
-  Future<_AIChatResponse> _tryGemini(String system, String user) async {
+  Future<_AIChatResponse> _tryGemini(
+    String system,
+    String user, {
+    String model = AppConstants.geminiModel,
+  }) async {
     final url = Uri.parse(
-      '${AppConstants.geminiBaseUrl}/${AppConstants.geminiModel}:generateContent?key=$apiKey',
+      '${AppConstants.geminiBaseUrl}/$model:generateContent?key=$apiKey',
     );
 
     final body = jsonEncode({
@@ -208,12 +231,12 @@ Kembalikan HANYA dalam format JSON berikut (tanpa teks lain):
         .timeout(const Duration(seconds: 15));
 
     if (!response.statusCode.toString().startsWith('2')) {
-      throw Exception('Gemini HTTP ${response.statusCode}: ${response.body}');
+      throw Exception('Gemini ($model) HTTP ${response.statusCode}: ${response.body}');
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] as String?;
-    if (text == null) throw Exception('Gemini empty response');
+    if (text == null) throw Exception('Gemini ($model) empty response');
 
     return _parseAIJson(text);
   }

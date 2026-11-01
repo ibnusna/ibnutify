@@ -8,6 +8,7 @@ import 'package:ibnutify/presentation/widgets/common/song_list_tile.dart';
 import 'package:ibnutify/presentation/widgets/common/dynamic_cover_widget.dart';
 import 'package:ibnutify/presentation/screens/library/library_screen.dart';
 import 'package:ibnutify/presentation/screens/library/add_songs_to_playlist_screen.dart';
+import 'package:ibnutify/presentation/screens/player/player_screen.dart';
 
 class PlaylistDetailScreen extends ConsumerStatefulWidget {
   final String title;
@@ -115,12 +116,11 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                 title: const Text('Acak Antrean', style: TextStyle(color: AppColors.onSurface)),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  final shuffled = List<SongModel>.from(displaySongs)..shuffle();
-                  if (shuffled.isNotEmpty) {
-                    ref.read(playerProvider.notifier).playSong(
-                          shuffled.first,
-                          shuffled,
-                          source: 'Playlist: ${widget.title}',
+                  if (displaySongs.isNotEmpty) {
+                    ref.read(playerProvider.notifier).playPlaylist(
+                          displaySongs,
+                          playlistName: widget.title,
+                          shuffle: true,
                         );
                   }
                 },
@@ -366,12 +366,11 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                             IconButton(
                               icon: const Icon(Icons.shuffle_rounded, color: Color(0xFF1DB954), size: 30),
                               onPressed: () {
-                                final shuffled = List<SongModel>.from(displaySongs)..shuffle();
-                                if (shuffled.isNotEmpty) {
-                                  ref.read(playerProvider.notifier).playSong(
-                                        shuffled.first,
-                                        shuffled,
-                                        source: 'Playlist: ${widget.title}',
+                                if (displaySongs.isNotEmpty) {
+                                  ref.read(playerProvider.notifier).playPlaylist(
+                                        displaySongs,
+                                        playlistName: widget.title,
+                                        shuffle: true,
                                       );
                                 }
                               },
@@ -386,10 +385,10 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                                   if (isPlayingThisPlaylist) {
                                     ref.read(playerProvider.notifier).togglePlay();
                                   } else {
-                                    ref.read(playerProvider.notifier).playSong(
-                                          displaySongs.first,
+                                    ref.read(playerProvider.notifier).playPlaylist(
                                           displaySongs,
-                                          source: 'Playlist: ${widget.title}',
+                                          playlistName: widget.title,
+                                          initialSong: displaySongs.first,
                                         );
                                   }
                                 }
@@ -445,6 +444,27 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                           song: song,
                           queue: displaySongs,
                           queueSource: 'Playlist: ${widget.title}',
+                          onTap: () {
+                            FocusManager.instance.primaryFocus?.unfocus();
+                            ref.read(playerProvider.notifier).playPlaylist(
+                                  displaySongs,
+                                  playlistName: widget.title,
+                                  initialSong: song,
+                                );
+                            Navigator.of(context).push(
+                              PageRouteBuilder(
+                                pageBuilder: (_, __, ___) => const PlayerScreen(),
+                                transitionsBuilder: (_, animation, __, child) => SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0, 1),
+                                    end: Offset.zero,
+                                  ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                                  child: child,
+                                ),
+                                transitionDuration: const Duration(milliseconds: 350),
+                              ),
+                            );
+                          },
                           trailing: IconButton(
                             icon: const Icon(
                               Icons.more_vert_rounded,

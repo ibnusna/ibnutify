@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:on_audio_query/on_audio_query.dart' as oaq;
 import 'package:sqflite/sqflite.dart';
@@ -84,7 +83,7 @@ class MusicLocalDatasource {
     final batch = db.batch();
 
     for (final song in deviceSongs) {
-      final uri = song.data ?? song.uri ?? '';
+      final uri = song.data.isNotEmpty ? song.data : (song.uri ?? '');
       if (uri.isEmpty) continue;
       if (deletedIds.contains(song.id) || deletedUris.contains(uri)) continue;
 

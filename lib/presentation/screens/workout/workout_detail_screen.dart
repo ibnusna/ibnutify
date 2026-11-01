@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/datasources/database_helper.dart';
 import '../../../data/models/activity_model.dart';
-import '../../providers/app_providers.dart' show LatLngPoint;
+import '../../providers/app_providers.dart' show LatLngPoint, activitiesProvider;
 import '../../widgets/workout/osm_map_widget.dart';
 
 /// WorkoutDetailScreen — detail riwayat aktivitas tunggal.
-/// Menampilkan: peta OSM realtime + semua statistik aktivitas.
+/// Menampilkan: peta OSM realtime + statistik aktivitas yang kondisional & opsi hapus.
 /// Dipanggil dari WorkoutHistoryScreen saat user tap card riwayat.
-class WorkoutDetailScreen extends StatelessWidget {
+class WorkoutDetailScreen extends ConsumerWidget {
   final ActivityModel activity;
 
   const WorkoutDetailScreen({super.key, required this.activity});
@@ -47,9 +49,149 @@ class WorkoutDetailScreen extends StatelessWidget {
     return parsed.map((e) => LatLngPoint(e['lat']!, e['lng']!)).toList();
   }
 
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerHigh,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.error.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.delete_outline_rounded,
+                  color: AppColors.error, size: 22),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Hapus Aktivitas?',
+              style: TextStyle(
+                color: AppColors.onSurface,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Apakah kamu yakin ingin menghapus riwayat aktivitas ini? Data rute dan statistik akan dihapus permanen.',
+          style: TextStyle(
+            color: AppColors.onSurfaceVariant,
+            fontSize: 14,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal',
+                style: TextStyle(
+                    color: AppColors.onSurfaceVariant,
+                    fontWeight: FontWeight.w600)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && activity.id != null && context.mounted) {
+      await DatabaseHelper.instance.deleteActivity(activity.id!);
+      ref.invalidate(activitiesProvider);
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Aktivitas berhasil dihapus'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final routePoints = _parseRoutePoints();
+
+    // ── Build Bento Items Secara Kondisional (Tidak menampilkan data kosong/strip) ──
+    final bentoItems = <Widget>[
+      _StatBento(
+        icon: Icons.route_rounded,
+        iconColor: AppColors.onSurfaceVariant,
+        value: activity.formattedDistance,
+        label: 'Jarak Total',
+        valueColor: AppColors.primary,
+      ),
+      _StatBento(
+        icon: Icons.timer_rounded,
+        iconColor: AppColors.onSurfaceVariant,
+        value: activity.formattedDuration,
+        label: 'Waktu Total',
+      ),
+      if (activity.avgPace != '--\'--"/km')
+        _StatBento(
+          icon: Icons.speed_rounded,
+          iconColor: AppColors.onSurfaceVariant,
+          value: activity.avgPace,
+          label: 'Pace Rata-rata',
+        ),
+      if (routePoints.isNotEmpty)
+        _StatBento(
+          icon: Icons.my_location_rounded,
+          iconColor: AppColors.primary,
+          value: '${routePoints.length}',
+          label: 'Titik GPS',
+        ),
+      // Langkah HANYA tampil jika bukan mode Sepeda dan langkah terdeteksi (> 0)
+      if (activity.sportMode != 'Sepeda' && activity.stepCount > 0)
+        _StatBento(
+          icon: Icons.directions_walk_rounded,
+          iconColor: AppColors.onSurfaceVariant,
+          value: '${activity.stepCount}',
+          label: 'Langkah',
+          valueColor: AppColors.primary,
+        ),
+      // Elevasi HANYA tampil jika ada elevasi naik (> 0)
+      if (activity.elevationGainM > 0)
+        _StatBento(
+          icon: Icons.trending_up_rounded,
+          iconColor: const Color(0xFF66BB6A),
+          value: '+${activity.elevationGainM.toStringAsFixed(0)} m',
+          label: 'Elevasi Naik',
+          valueColor: const Color(0xFF66BB6A),
+        ),
+      // Kalori HANYA tampil jika > 0
+      if (activity.estimatedCalories > 0)
+        _StatBento(
+          icon: Icons.local_fire_department_rounded,
+          iconColor: Colors.deepOrangeAccent,
+          value: '${activity.estimatedCalories.toStringAsFixed(0)} kal',
+          label: 'Kalori',
+          valueColor: Colors.deepOrangeAccent,
+        ),
+      // Detak Jantung HANYA tampil jika smartwatch mendeteksi HR (> 0)
+      if (activity.avgHeartRateBpm > 0)
+        _StatBento(
+          icon: Icons.favorite_rounded,
+          iconColor: Colors.redAccent,
+          value: '${activity.avgHeartRateBpm} bpm',
+          label: 'Detak Jantung',
+          valueColor: Colors.redAccent,
+        ),
+    ];
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -57,7 +199,10 @@ class WorkoutDetailScreen extends StatelessWidget {
         children: [
           // Subtle gradient background
           Positioned(
-            top: 0, left: 0, right: 0, height: 260,
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 260,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -86,7 +231,7 @@ class WorkoutDetailScreen extends StatelessWidget {
                             color: AppColors.onSurface),
                         onPressed: () => Navigator.of(context).pop(),
                       ),
-                      const Spacer(),
+                      const SizedBox(width: 8),
                       const Text(
                         'Detail Aktivitas',
                         style: TextStyle(
@@ -96,7 +241,13 @@ class WorkoutDetailScreen extends StatelessWidget {
                         ),
                       ),
                       const Spacer(),
-                      const SizedBox(width: 48),
+                      // Tombol Hapus Aktivitas Tunggal
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline_rounded,
+                            color: AppColors.error),
+                        tooltip: 'Hapus Aktivitas',
+                        onPressed: () => _confirmDelete(context, ref),
+                      ),
                     ],
                   ),
                 ),
@@ -105,8 +256,9 @@ class WorkoutDetailScreen extends StatelessWidget {
                 Expanded(
                   child: SingleChildScrollView(
                     padding: EdgeInsets.fromLTRB(
-                      16, 8, 16,
-                      // Pastikan konten tidak terpotong system navigation bar
+                      16,
+                      8,
+                      16,
                       MediaQuery.of(context).padding.bottom + 24,
                     ),
                     child: Column(
@@ -164,7 +316,7 @@ class WorkoutDetailScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 20),
 
-                        // ── Stats Bento Grid ──────────────────────────────
+                        // ── Stats Bento Grid (Semua item dijamin memiliki data valid) ──
                         GridView.count(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
@@ -172,71 +324,7 @@ class WorkoutDetailScreen extends StatelessWidget {
                           mainAxisSpacing: 12,
                           crossAxisSpacing: 12,
                           childAspectRatio: 1.6,
-                          children: [
-                            _StatBento(
-                              icon: Icons.route_rounded,
-                              iconColor: AppColors.onSurfaceVariant,
-                              value: activity.formattedDistance,
-                              label: 'Jarak Total',
-                              valueColor: AppColors.primary,
-                            ),
-                            _StatBento(
-                              icon: Icons.timer_rounded,
-                              iconColor: AppColors.onSurfaceVariant,
-                              value: activity.formattedDuration,
-                              label: 'Waktu Total',
-                            ),
-                            _StatBento(
-                              icon: Icons.speed_rounded,
-                              iconColor: AppColors.onSurfaceVariant,
-                              value: activity.avgPace,
-                              label: 'Pace Rata-rata',
-                            ),
-                            _StatBento(
-                              icon: Icons.my_location_rounded,
-                              iconColor: AppColors.primary,
-                              value: '${routePoints.length}',
-                              label: 'Titik GPS',
-                            ),
-                            // ── Sensor fusion stats (DB v7) ───────────────
-                            _StatBento(
-                              icon: Icons.directions_walk_rounded,
-                              iconColor: AppColors.onSurfaceVariant,
-                              value: activity.sportMode == 'Sepeda'
-                                  ? '--'
-                                  : '${activity.stepCount}',
-                              label: 'Langkah',
-                            ),
-                            _StatBento(
-                              icon: Icons.trending_up_rounded,
-                              iconColor: const Color(0xFF66BB6A),
-                              value: '+${activity.elevationGainM.toStringAsFixed(0)} m',
-                              label: 'Elevasi Naik',
-                              valueColor: const Color(0xFF66BB6A),
-                            ),
-                            _StatBento(
-                              icon: Icons.local_fire_department_rounded,
-                              iconColor: Colors.deepOrangeAccent,
-                              value: activity.estimatedCalories > 0
-                                  ? '${activity.estimatedCalories.toStringAsFixed(0)} kal'
-                                  : '-- kal',
-                              label: 'Kalori',
-                              valueColor: activity.estimatedCalories > 0
-                                  ? Colors.deepOrangeAccent
-                                  : AppColors.onSurface,
-                            ),
-                            _StatBento(
-                              icon: Icons.favorite_rounded,
-                              iconColor: Colors.redAccent,
-                              value: activity.avgHeartRateBpm > 0
-                                  ? '${activity.avgHeartRateBpm} bpm'
-                                  : '-- bpm',
-                              label: 'Detak Jantung',
-                              valueColor: activity.avgHeartRateBpm > 0
-                                  ? Colors.redAccent
-                                  : AppColors.onSurfaceVariant,
-                            ),
-                          ],
+                          children: bentoItems,
                         ),
                       ],
                     ),

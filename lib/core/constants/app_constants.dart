@@ -1,6 +1,7 @@
 class AppConstants {
   // Gemini
-  static const String geminiModel = 'gemini-2.5-flash';
+  static const String geminiModel = 'gemini-3.5-flash-lite';
+  static const String geminiFallbackModel = 'gemini-3.5-flash';
   static const String geminiBaseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models';
 
@@ -8,11 +9,11 @@ class AppConstants {
   static const String openRouterUrl = 'https://openrouter.ai/api/v1/chat/completions';
   static const String openRouterKey = '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';
   static const List<String> openRouterModels = [
-    'google/gemini-2.5-flash-lite',
-    'nvidia/nemotron-3-nano-30b-a3b:free',
-    'deepseek/deepseek-r1-0528:free',
-    'xiaomi/mimo-v2-flash:free',
-    'google/gemma-2-9b-it:free',
+    'google/gemma-4-31b-it:free',
+    'nvidia/nemotron-3.5-lightning:free',
+    'liquid/lfm-2.5-2.6b:free',
+    'google/gemma-4-26b-a4b-it:free',
+    'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
   ];
 
   // Hive boxes

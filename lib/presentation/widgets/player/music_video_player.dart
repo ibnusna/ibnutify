@@ -112,26 +112,27 @@ class _MusicVideoPlayerState extends ConsumerState<MusicVideoPlayer> {
     }
 
     if (_errorMessage != null) {
-      final isOffline = _errorMessage!.toLowerCase().contains('socket') || _errorMessage!.toLowerCase().contains('network') || _errorMessage!.toLowerCase().contains('host');
+      final isOffline = _errorMessage!.toLowerCase().contains('socket') ||
+          _errorMessage!.toLowerCase().contains('network') ||
+          _errorMessage!.toLowerCase().contains('host');
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(isOffline ? Icons.wifi_off_rounded : Icons.error_outline_rounded, color: Colors.white54, size: 48),
+            Icon(
+              isOffline ? Icons.wifi_off_rounded : Icons.play_disabled_rounded,
+              color: Colors.white54,
+              size: 48,
+            ),
             const SizedBox(height: 16),
             Text(
-              isOffline ? 'Koneksi internet terputus.' : 'Gagal memuat video.',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-            if (!isOffline)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  _errorMessage!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white54, fontSize: 10),
-                ),
+              isOffline ? 'Koneksi internet terputus.' : 'Video musik tidak dapat dimuat.',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
               ),
+            ),
           ],
         ),
       );

@@ -144,14 +144,13 @@ class _WorkoutSummaryScreenState extends ConsumerState<WorkoutSummaryScreen>
             child: Column(
               children: [
                 // App Bar
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: Row(
                     children: [
-                      const SizedBox(width: 48), // spacer for centering
-                      const Spacer(),
-                      const Text(
+                      SizedBox(width: 48), // spacer for centering
+                      Spacer(),
+                      Text(
                         'Ringkasan Latihan',
                         style: TextStyle(
                           color: AppColors.onSurface,
@@ -159,8 +158,8 @@ class _WorkoutSummaryScreenState extends ConsumerState<WorkoutSummaryScreen>
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                      const Spacer(),
-                      const SizedBox(width: 48),
+                      Spacer(),
+                      SizedBox(width: 48),
                     ],
                   ),
                 ),
@@ -289,14 +288,14 @@ class _WorkoutSummaryScreenState extends ConsumerState<WorkoutSummaryScreen>
                                               color:
                                                   Colors.white.withOpacity(0.1)),
                                         ),
-                                        child: Row(
+                                        child: const Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            const Icon(Icons.my_location_rounded,
+                                            Icon(Icons.my_location_rounded,
                                                 color: AppColors.primary,
                                                 size: 14),
-                                            const SizedBox(width: 5),
-                                            const Text(
+                                            SizedBox(width: 5),
+                                            Text(
                                               'Rute Selesai',
                                               style: TextStyle(
                                                 color: AppColors.onSurface,
@@ -314,7 +313,7 @@ class _WorkoutSummaryScreenState extends ConsumerState<WorkoutSummaryScreen>
                             ),
                             const SizedBox(height: 20),
 
-                            // Stats bento grid
+                            // Stats bento grid (Semua item dijamin memiliki data valid)
                             GridView.count(
                               shrinkWrap: true,
                               physics: const NeverScrollableScrollPhysics(),
@@ -338,54 +337,59 @@ class _WorkoutSummaryScreenState extends ConsumerState<WorkoutSummaryScreen>
                                   value: snap.formattedDuration,
                                   label: 'Waktu Total',
                                 ),
-                                _StatBento(
-                                  icon: Icons.speed_rounded,
-                                  iconColor: AppColors.onSurfaceVariant,
-                                  value: snap.avgPace,
-                                  label: 'Pace Rata-rata',
-                                ),
-                                _StatBento(
-                                  icon: Icons.library_music_rounded,
-                                  iconColor: AppColors.primary,
-                                  value: '${snap.songsPlayed} Lagu',
-                                  label: 'Dimainkan',
-                                ),
-                                _StatBento(
-                                  icon: Icons.directions_walk_rounded,
-                                  iconColor: AppColors.onSurfaceVariant,
-                                  value: snap.sportMode == 'Sepeda'
-                                      ? '--'
-                                      : snap.stepCount.toString(),
-                                  label: 'Langkah',
-                                  valueColor: AppColors.primary,
-                                ),
-                                _StatBento(
-                                  icon: Icons.trending_up_rounded,
-                                  iconColor: const Color(0xFF66BB6A),
-                                  value: '+${snap.elevationGainM.toStringAsFixed(0)} m',
-                                  label: 'Elevasi Naik',
-                                  valueColor: const Color(0xFF66BB6A),
-                                ),
-                                _StatBento(
-                                  icon: Icons.local_fire_department_rounded,
-                                  iconColor: Colors.deepOrangeAccent,
-                                  value: snap.estimatedCalories > 0
-                                      ? '${snap.estimatedCalories.toStringAsFixed(0)} kal'
-                                      : '-- kal',
-                                  label: 'Kalori',
-                                  valueColor: Colors.deepOrangeAccent,
-                                ),
-                                _StatBento(
-                                  icon: Icons.favorite_rounded,
-                                  iconColor: Colors.redAccent,
-                                  value: snap.heartRateBpm > 0
-                                      ? '${snap.heartRateBpm} bpm'
-                                      : '-- bpm',
-                                  label: 'HR Terakhir',
-                                  valueColor: snap.heartRateBpm > 0
-                                      ? Colors.redAccent
-                                      : AppColors.onSurfaceVariant,
-                                ),
+                                if (snap.avgPace != '--\'--"/km')
+                                  _StatBento(
+                                    icon: Icons.speed_rounded,
+                                    iconColor: AppColors.onSurfaceVariant,
+                                    value: snap.avgPace,
+                                    label: 'Pace Rata-rata',
+                                  ),
+                                if (snap.songsPlayed > 0)
+                                  _StatBento(
+                                    icon: Icons.library_music_rounded,
+                                    iconColor: AppColors.primary,
+                                    value: '${snap.songsPlayed} Lagu',
+                                    label: 'Dimainkan',
+                                  ),
+                                // Langkah HANYA jika bukan mode Sepeda dan langkah terdeteksi (> 0)
+                                if (snap.sportMode != 'Sepeda' &&
+                                    snap.stepCount > 0)
+                                  _StatBento(
+                                    icon: Icons.directions_walk_rounded,
+                                    iconColor: AppColors.onSurfaceVariant,
+                                    value: snap.stepCount.toString(),
+                                    label: 'Langkah',
+                                    valueColor: AppColors.primary,
+                                  ),
+                                // Elevasi HANYA jika > 0
+                                if (snap.elevationGainM > 0)
+                                  _StatBento(
+                                    icon: Icons.trending_up_rounded,
+                                    iconColor: const Color(0xFF66BB6A),
+                                    value:
+                                        '+${snap.elevationGainM.toStringAsFixed(0)} m',
+                                    label: 'Elevasi Naik',
+                                    valueColor: const Color(0xFF66BB6A),
+                                  ),
+                                // Kalori HANYA jika > 0
+                                if (snap.estimatedCalories > 0)
+                                  _StatBento(
+                                    icon: Icons.local_fire_department_rounded,
+                                    iconColor: Colors.deepOrangeAccent,
+                                    value:
+                                        '${snap.estimatedCalories.toStringAsFixed(0)} kal',
+                                    label: 'Kalori',
+                                    valueColor: Colors.deepOrangeAccent,
+                                  ),
+                                // HR HANYA jika smartwatch mendeteksi detak jantung (> 0)
+                                if (snap.heartRateBpm > 0)
+                                  _StatBento(
+                                    icon: Icons.favorite_rounded,
+                                    iconColor: Colors.redAccent,
+                                    value: '${snap.heartRateBpm} bpm',
+                                    label: 'HR Terakhir',
+                                    valueColor: Colors.redAccent,
+                                  ),
                               ],
                             ),
                           ],

@@ -966,6 +966,11 @@ def download_playlist(spotify_url, download_dir, ffmpeg_path=''):
             meta = _scrape_track_metadata(track_url)
             if meta:
                 track_metas.append(meta)
+                _set_progress(
+                    cover_url=meta.get('cover_url', '') or '',
+                    current_title=meta.get('title', ''),
+                    current_artist=meta.get('artist', ''),
+                )
             if i < len(ids) - 1:
                 time.sleep(0.15)
 
@@ -990,6 +995,7 @@ def download_playlist(spotify_url, download_dir, ffmpeg_path=''):
     total = len(track_metas)
     successful = 0
     failed = []
+    downloaded_tracks = []
     use_ffmpeg = bool(ffmpeg_path and os.path.exists(ffmpeg_path))
 
     # ── 3. Download tiap track ────────────────────────────────────────────────
@@ -1054,6 +1060,12 @@ def download_playlist(spotify_url, download_dir, ffmpeg_path=''):
             _add_debug_log("  Skipping (already exists): {}".format(final_filepath))
             _set_progress(status='skipped', percent=100.0, file_path=final_filepath)
             successful += 1
+            downloaded_tracks.append({
+                'title': track_info['title'],
+                'artist': track_info['artist'],
+                'album': track_info.get('album', ''),
+                'file_path': final_filepath,
+            })
             continue
 
         # Build yt-dlp options (Atomic pattern: tulis ke _tmp_ dulu)
@@ -1171,6 +1183,12 @@ def download_playlist(spotify_url, download_dir, ffmpeg_path=''):
             )
             successful += 1
             _add_debug_log("  Track downloaded OK: {}".format(final_filepath))
+            downloaded_tracks.append({
+                'title': track_info['title'],
+                'artist': track_info['artist'],
+                'album': track_info.get('album', ''),
+                'file_path': final_filepath,
+            })
 
         except Exception as e:
             import traceback
@@ -1210,5 +1228,6 @@ def download_playlist(spotify_url, download_dir, ffmpeg_path=''):
         'successful': successful,
         'failed': failed,
         'playlist_folder': playlist_folder,
+        'downloaded_tracks': downloaded_tracks,
         'error': '',
     })

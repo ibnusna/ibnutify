@@ -238,6 +238,13 @@ class DatabaseHelper {
     await db.delete('activities', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<void> deleteActivities(List<int> ids) async {
+    if (ids.isEmpty) return;
+    final db = await instance.database;
+    final placeholders = List.filled(ids.length, '?').join(',');
+    await db.delete('activities', where: 'id IN ($placeholders)', whereArgs: ids);
+  }
+
   Future<void> clearAll() async {
     final db = await instance.database;
     await db.delete('songs');

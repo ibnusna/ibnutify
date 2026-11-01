@@ -133,6 +133,30 @@ class DownloadResult {
   }
 }
 
+/// Informasi lagu yang diunduh dari playlist Spotify.
+class DownloadedTrackInfo {
+  final String title;
+  final String artist;
+  final String album;
+  final String filePath;
+
+  const DownloadedTrackInfo({
+    required this.title,
+    required this.artist,
+    this.album = '',
+    this.filePath = '',
+  });
+
+  factory DownloadedTrackInfo.fromJson(Map<String, dynamic> json) {
+    return DownloadedTrackInfo(
+      title: json['title'] as String? ?? '',
+      artist: json['artist'] as String? ?? '',
+      album: json['album'] as String? ?? '',
+      filePath: json['file_path'] as String? ?? '',
+    );
+  }
+}
+
 /// Hasil download playlist.
 class PlaylistResult {
   final bool success;
@@ -141,6 +165,7 @@ class PlaylistResult {
   final int successful;
   final List<String> failed;
   final String playlistFolder;
+  final List<DownloadedTrackInfo> downloadedTracks;
   final String error;
 
   const PlaylistResult({
@@ -150,10 +175,17 @@ class PlaylistResult {
     required this.successful,
     required this.failed,
     required this.playlistFolder,
+    this.downloadedTracks = const [],
     required this.error,
   });
 
   factory PlaylistResult.fromJson(Map<String, dynamic> json) {
+    final rawTracks = json['downloaded_tracks'] as List<dynamic>? ?? [];
+    final tracks = rawTracks
+        .whereType<Map<String, dynamic>>()
+        .map((e) => DownloadedTrackInfo.fromJson(e))
+        .toList();
+
     return PlaylistResult(
       success: json['success'] as bool? ?? false,
       playlistName: json['playlist_name'] as String? ?? '',
@@ -161,6 +193,7 @@ class PlaylistResult {
       successful: (json['successful'] as num? ?? 0).toInt(),
       failed: (json['failed'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
       playlistFolder: json['playlist_folder'] as String? ?? '',
+      downloadedTracks: tracks,
       error: json['error'] as String? ?? '',
     );
   }
@@ -173,6 +206,7 @@ class PlaylistResult {
       successful: 0,
       failed: const [],
       playlistFolder: '',
+      downloadedTracks: const [],
       error: message,
     );
   }

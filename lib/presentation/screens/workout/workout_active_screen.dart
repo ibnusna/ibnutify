@@ -656,12 +656,12 @@ class _PaceMatchPlayer extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                const Row(
                   children: [
-                    const Icon(Icons.speed_rounded,
+                    Icon(Icons.speed_rounded,
                         color: AppColors.primary, size: 12),
-                    const SizedBox(width: 4),
-                    const Text(
+                    SizedBox(width: 4),
+                    Text(
                       'PACE MATCH',
                       style: TextStyle(
                         color: AppColors.primary,
@@ -802,7 +802,62 @@ class _SensorStatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final showCadence = workout.sportMode != 'Sepeda' && workout.cadenceSpm > 0;
+    final isCycling = workout.sportMode == 'Sepeda';
+    final showCadence = !isCycling && workout.cadenceSpm > 0;
+
+    final statItems = <Widget>[];
+
+    if (isCycling) {
+      // Pada mode Sepeda: tampilkan Kecepatan realtime km/h dari Doppler GPS
+      final speedKmh = (workout.currentSpeedMs * 3.6).toStringAsFixed(1);
+      statItems.add(_SensorMini(
+        icon: Icons.speed_rounded,
+        value: speedKmh,
+        unit: 'km/j',
+        color: AppColors.primary,
+      ));
+    } else {
+      // Pada mode Berlari / Berjalan / Mendaki: tampilkan Langkah
+      statItems.add(_SensorMini(
+        icon: Icons.directions_walk_rounded,
+        value: workout.stepCount.toString(),
+        unit: 'langkah',
+        color: AppColors.primary,
+      ));
+      if (showCadence) {
+        statItems.add(_SensorMini(
+          icon: Icons.speed_rounded,
+          value: '${workout.cadenceSpm.round()}',
+          unit: 'spm',
+          color: Colors.orangeAccent,
+        ));
+      }
+    }
+
+    // Elevasi Naik
+    statItems.add(_SensorMini(
+      icon: Icons.trending_up_rounded,
+      value: '+${workout.elevationGainM.toStringAsFixed(0)}',
+      unit: 'm elev',
+      color: const Color(0xFF66BB6A),
+    ));
+
+    // Estimasi Kalori
+    statItems.add(_SensorMini(
+      icon: Icons.local_fire_department_rounded,
+      value: workout.estimatedCalories.toStringAsFixed(0),
+      unit: 'kal',
+      color: Colors.deepOrangeAccent,
+    ));
+
+    final rowChildren = <Widget>[];
+    for (int i = 0; i < statItems.length; i++) {
+      if (i > 0) {
+        rowChildren.add(Container(
+            width: 1, height: 36, color: Colors.white.withOpacity(0.07)));
+      }
+      rowChildren.add(Expanded(child: statItems[i]));
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
@@ -813,53 +868,11 @@ class _SensorStatsRow extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Row: Steps / Cadence / Elevation / Calories
-          Row(
-            children: [
-              Expanded(
-                child: _SensorMini(
-                  icon: Icons.directions_walk_rounded,
-                  value: workout.sportMode == 'Sepeda'
-                      ? '--'
-                      : workout.stepCount.toString(),
-                  unit: 'langkah',
-                  color: AppColors.primary,
-                ),
-              ),
-              Container(width: 1, height: 36, color: Colors.white.withOpacity(0.07)),
-              Expanded(
-                child: _SensorMini(
-                  icon: Icons.speed_rounded,
-                  value: showCadence
-                      ? '${workout.cadenceSpm.round()}'
-                      : '--',
-                  unit: 'spm',
-                  color: Colors.orangeAccent,
-                ),
-              ),
-              Container(width: 1, height: 36, color: Colors.white.withOpacity(0.07)),
-              Expanded(
-                child: _SensorMini(
-                  icon: Icons.trending_up_rounded,
-                  value: '+${workout.elevationGainM.toStringAsFixed(0)}',
-                  unit: 'm elev',
-                  color: const Color(0xFF66BB6A),
-                ),
-              ),
-              Container(width: 1, height: 36, color: Colors.white.withOpacity(0.07)),
-              Expanded(
-                child: _SensorMini(
-                  icon: Icons.local_fire_department_rounded,
-                  value: workout.estimatedCalories.toStringAsFixed(0),
-                  unit: 'kal',
-                  color: Colors.deepOrangeAccent,
-                ),
-              ),
-            ],
-          ),
+          // Row: Metrik adaptif tanpa nilai strip '--'
+          Row(children: rowChildren),
 
-          // Heart Rate row (only shown when watch is connected)
-          if (workout.isWatchConnected || workout.heartRateBpm > 0) ...[
+          // Heart Rate row (HANYA ditampilkan jika smartwatch mendeteksi HR > 0)
+          if (workout.heartRateBpm > 0) ...[
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -867,7 +880,8 @@ class _SensorStatsRow extends StatelessWidget {
                 color: Color(workout.currentHrZone.colorValue).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: Color(workout.currentHrZone.colorValue).withOpacity(0.25),
+                  color:
+                      Color(workout.currentHrZone.colorValue).withOpacity(0.25),
                 ),
               ),
               child: Row(
@@ -880,7 +894,7 @@ class _SensorStatsRow extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    workout.heartRateBpm > 0 ? '${workout.heartRateBpm} bpm' : '-- bpm',
+                    '${workout.heartRateBpm} bpm',
                     style: TextStyle(
                       color: Color(workout.currentHrZone.colorValue),
                       fontSize: 16,
@@ -889,9 +903,11 @@ class _SensorStatsRow extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Color(workout.currentHrZone.colorValue).withOpacity(0.15),
+                      color: Color(workout.currentHrZone.colorValue)
+                          .withOpacity(0.15),
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
@@ -907,7 +923,8 @@ class _SensorStatsRow extends StatelessWidget {
                   const Spacer(),
                   Icon(
                     Icons.watch_rounded,
-                    color: Color(workout.currentHrZone.colorValue).withOpacity(0.6),
+                    color:
+                        Color(workout.currentHrZone.colorValue).withOpacity(0.6),
                     size: 14,
                   ),
                   const SizedBox(width: 4),

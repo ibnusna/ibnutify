@@ -376,6 +376,52 @@ class PlayerNotifier extends Notifier<PlayerState> {
     _fetchAndSendArtwork(effectiveQueue, handler);
   }
 
+  /// [REQ-4.1 & REQ-2.2] Putar seluruh playlist dengan antrean terisolasi (Playlist Queue Isolation).
+  /// Hanya berisi lagu-lagu dalam playlist tersebut tanpa mencampur lagu luar library.
+  Future<void> playPlaylist(
+    List<SongModel> playlistSongs, {
+    String? playlistName,
+    SongModel? initialSong,
+    bool shuffle = false,
+  }) async {
+    if (playlistSongs.isEmpty) return;
+
+    final targetInitial = initialSong ?? playlistSongs.first;
+    List<SongModel> isolatedQueue = List<SongModel>.from(playlistSongs);
+    bool appliedShuffle = false;
+
+    if (shuffle && playlistSongs.length >= 2) {
+      final repo = ref.read(musicRepositoryProvider);
+      try {
+        final recentLogs = await repo.getListeningHistory24h();
+        final shuffledIndices = await SmartShuffleService.computeSmartShuffleIndices(
+          playlistSongs,
+          recentLogs,
+          targetInitial.id,
+        );
+        if (shuffledIndices.isNotEmpty) {
+          isolatedQueue = shuffledIndices.map((i) => playlistSongs[i]).toList();
+          appliedShuffle = true;
+        }
+      } catch (e) {
+        debugPrint('[PlayerNotifier] playPlaylist Smart Shuffle error: $e');
+        isolatedQueue.shuffle();
+        appliedShuffle = true;
+      }
+    }
+
+    final name = playlistName ?? 'Playlist';
+    await playSong(
+      targetInitial,
+      isolatedQueue,
+      source: 'Playlist: $name',
+      skipAutoShuffle: true, // Queue sudah terisolasi dan tertangani
+    );
+
+    state = state.copyWith(isShuffle: appliedShuffle);
+    debugPrint('[PlayerNotifier] playPlaylist: "$name" isolated with ${isolatedQueue.length} tracks (shuffled=$appliedShuffle)');
+  }
+
 
   Future<void> playFromSearch(SongModel song) async {
     final allSongs = ref.read(songsProvider).value ?? [];
@@ -1047,10 +1093,10 @@ class AIChatState {
     this.isLoading = false,
     this.pendingSongs,
     this.pendingPlaylistName,
-  })  : sessionId = sessionId ?? _generateId(),
+  })  : sessionId = sessionId ?? generateId(),
         sessionCreatedAt = sessionCreatedAt ?? DateTime.now();
 
-  static String _generateId() {
+  static String generateId() {
     final now = DateTime.now().millisecondsSinceEpoch;
     final rnd = math.Random().nextInt(99999);
     return 'sess_${now}_$rnd';
@@ -1135,7 +1181,11 @@ class AIChatNotifier extends Notifier<AIChatState> {
         createdAt: state.sessionCreatedAt,
       );
 
-      ChatHistoryService.instance.saveSession(session);
+      ChatHistoryService.instance.saveSession(session).then((_) {
+        try {
+          ref.read(chatHistoryProvider.notifier).refresh();
+        } catch (_) {}
+      });
       debugPrint('[AIChatNotifier] Auto-saved session "$title"');
     } catch (e) {
       debugPrint('[AIChatNotifier] Auto-save error: $e');
@@ -1181,8 +1231,12 @@ class AIChatNotifier extends Notifier<AIChatState> {
   }
 
   void clearChat() {
-    debugPrint('[AIChatNotifier] clearChat — starting new session');
-    state = build();
+    debugPrint('[AIChatNotifier] clearChat — starting brand new session');
+    state = AIChatState(
+      sessionId: AIChatState.generateId(),
+      sessionCreatedAt: DateTime.now(),
+      messages: const [],
+    );
   }
 
   /// Restore sesi dari history ke state aktif.
@@ -1217,10 +1271,25 @@ class PlaylistsNotifier extends AsyncNotifier<List<PlaylistModel>> {
     state = AsyncData(await repo.getAllPlaylists());
   }
 
-  Future<void> create(String name, {String? description}) async {
+  Future<PlaylistModel> create(String name, {String? description}) async {
     final repo = ref.read(musicRepositoryProvider);
-    await repo.createPlaylist(name, description: description);
+    final playlist = await repo.createPlaylist(name, description: description);
     await refresh();
+    return playlist;
+  }
+
+  Future<PlaylistModel> getOrCreate(String name, {String? description}) async {
+    final repo = ref.read(musicRepositoryProvider);
+    final existing = await repo.getAllPlaylists();
+    final found = existing
+        .where((p) => p.name.trim().toLowerCase() == name.trim().toLowerCase())
+        .firstOrNull;
+    if (found != null) {
+      return found;
+    }
+    final playlist = await repo.createPlaylist(name, description: description);
+    await refresh();
+    return playlist;
   }
 
   Future<void> addSong(String playlistId, int songId) async {
@@ -1467,12 +1536,24 @@ class DownloadChatMessage {
   final bool isSystem;         // true = dari sistem, bukan user
   final bool isProgress;       // true = pesan progress yang akan di-update in-place
   final DownloadProgress? progress;
+  final String? downloadedFilePath;
+  final String? downloadedPlaylistFolder;
+  final String? targetTitle;
+  final String? targetArtist;
+  final bool isPlaylist;
+  final String? playlistId;
 
   const DownloadChatMessage({
     required this.content,
     this.isSystem = true,
     this.isProgress = false,
     this.progress,
+    this.downloadedFilePath,
+    this.downloadedPlaylistFolder,
+    this.targetTitle,
+    this.targetArtist,
+    this.isPlaylist = false,
+    this.playlistId,
   });
 
   DownloadChatMessage copyWithProgress(DownloadProgress p, String text) {
@@ -1481,6 +1562,12 @@ class DownloadChatMessage {
       isSystem: true,
       isProgress: true,
       progress: p,
+      downloadedFilePath: downloadedFilePath,
+      downloadedPlaylistFolder: downloadedPlaylistFolder,
+      targetTitle: targetTitle,
+      targetArtist: targetArtist,
+      isPlaylist: isPlaylist,
+      playlistId: playlistId,
     );
   }
 }
@@ -1562,13 +1649,6 @@ class DownloadNotifier extends Notifier<DownloadState> {
   /// User mengirim teks saat mode awaitingUrl — langsung proses sebagai URL.
   Future<void> handleUserInput(String input) async {
     debugPrint('[DownloadNotifier] handleUserInput: "$input"');
-
-    // [REQ-1.3 FIX] Tampilkan pesan input pengguna di obrolan chat sebelum unduhan
-    final userMsg = DownloadChatMessage(
-      content: input,
-      isSystem: false,
-    );
-    state = state.copyWith(messages: [...state.messages, userMsg]);
 
     // Routing: cek playlist dulu, lalu track, lalu error
     if (DownloadService.isSpotifyPlaylistUrl(input)) {
@@ -1689,6 +1769,10 @@ class DownloadNotifier extends Notifier<DownloadState> {
           content: '**Lagu sudah ada!**\n\n'
               '`${result.title}` sudah tersimpan di folder Download/Ibnutify.\n'
               'Download dilewati.',
+          downloadedFilePath: result.filePath,
+          targetTitle: result.title,
+          targetArtist: result.artist,
+          isPlaylist: false,
         );
       } else {
         resultMsg = DownloadChatMessage(
@@ -1697,6 +1781,10 @@ class DownloadNotifier extends Notifier<DownloadState> {
               'Artist: ${result.artist}\n'
               'Album: ${result.album}\n\n'
               'Tersimpan di: `Download/Ibnutify/`',
+          downloadedFilePath: result.filePath,
+          targetTitle: result.title,
+          targetArtist: result.artist,
+          isPlaylist: false,
         );
       }
       state = state.copyWith(
@@ -1782,9 +1870,79 @@ class DownloadNotifier extends Notifier<DownloadState> {
     final result = await service.downloadPlaylist(url);
     _stopPolling();
 
-    // Trigger local library scan jika ada yang berhasil
+    // Trigger local library scan & auto-save playlist jika ada yang berhasil
+    String? createdPlaylistId;
     if (result.success) {
-      ref.read(songsProvider.notifier).scanDeviceSongs();
+      await ref.read(songsProvider.notifier).scanDeviceSongs();
+      final allSongs = ref.read(songsProvider).value ?? [];
+
+      final cleanName = result.playlistName.trim().isNotEmpty
+          ? result.playlistName.trim()
+          : 'Spotify Playlist';
+
+      try {
+        final playlist = await ref
+            .read(playlistsProvider.notifier)
+            .getOrCreate(cleanName, description: 'Diunduh dari Spotify');
+        createdPlaylistId = playlist.id;
+
+        // Cocokkan lagu hasil unduhan dengan SongModel di SQLite
+        final matchedSongIds = <int>[];
+        for (final track in result.downloadedTracks) {
+          final normTitle = track.title.toLowerCase().trim();
+          final normArtist = track.artist.toLowerCase().trim();
+
+          final match = allSongs.where((s) {
+            final sTitle = s.title.toLowerCase().trim();
+            final sArtist = s.artist.toLowerCase().trim();
+            if (normTitle.isNotEmpty &&
+                (sTitle == normTitle ||
+                    sTitle.contains(normTitle) ||
+                    normTitle.contains(sTitle))) {
+              if (normArtist.isEmpty ||
+                  sArtist.contains(normArtist) ||
+                  normArtist.contains(sArtist)) {
+                return true;
+              }
+            }
+            if (track.filePath.isNotEmpty &&
+                (s.uri.contains(track.filePath) ||
+                    track.filePath.contains(s.title))) {
+              return true;
+            }
+            return false;
+          }).firstOrNull;
+
+          if (match != null && !matchedSongIds.contains(match.id)) {
+            matchedSongIds.add(match.id);
+          }
+        }
+
+        // Fallback jika matching downloadedTracks tidak menemukan semua lagu
+        if (matchedSongIds.length < result.successful &&
+            result.playlistFolder.isNotEmpty) {
+          final folderName = result.playlistFolder
+              .split(Platform.pathSeparator)
+              .last
+              .toLowerCase();
+          for (final s in allSongs) {
+            if (!matchedSongIds.contains(s.id)) {
+              if (s.uri.toLowerCase().contains(folderName) ||
+                  s.album.toLowerCase() == cleanName.toLowerCase()) {
+                matchedSongIds.add(s.id);
+              }
+            }
+          }
+        }
+
+        if (matchedSongIds.isNotEmpty) {
+          await ref
+              .read(playlistsProvider.notifier)
+              .addSongs(playlist.id, matchedSongIds);
+        }
+      } catch (e) {
+        debugPrint('[DownloadNotifier] Gagal membuat playlist otomatis: $e');
+      }
     }
 
     // Hapus progress bubble terakhir
@@ -1803,8 +1961,12 @@ class DownloadNotifier extends Notifier<DownloadState> {
             'Playlist: **${result.playlistName}**\n'
             'Total: ${result.total} lagu\n'
             'Berhasil: ${result.successful} lagu$failedInfo\n\n'
-            'Tersimpan di:\n'
-            '`Download/Ibnutify/${result.playlistName}/`',
+            'Tersimpan di Playlist: **${result.playlistName}**\n'
+            'Folder: `Download/Ibnutify/${result.playlistName}/`',
+        downloadedPlaylistFolder: result.playlistFolder,
+        targetTitle: result.playlistName,
+        playlistId: createdPlaylistId,
+        isPlaylist: true,
       );
     } else {
       resultMsg = DownloadChatMessage(
@@ -1824,7 +1986,7 @@ class DownloadNotifier extends Notifier<DownloadState> {
     _pollTimer?.cancel();
     _pollTimer = Timer.periodic(const Duration(milliseconds: 800), (_) async {
       final progress = await DownloadService.instance.pollProgress();
-      debugPrint('[DownloadNotifier.Poll] status=${progress.status.name} pct=${progress.percent.toStringAsFixed(1)} title="${progress.currentTitle}"');
+      debugPrint('[DownloadNotifier.Poll] status=${progress.status.name} pct=${progress.percent.toStringAsFixed(1)} title="${progress.currentTitle}" song=${progress.currentSongIndex}/${progress.totalSongs}');
       final msgs = List<DownloadChatMessage>.from(state.messages);
 
       // Cari indeks progress bubble terakhir
@@ -1837,11 +1999,18 @@ class DownloadNotifier extends Notifier<DownloadState> {
         state = state.copyWith(progress: progress);
       }
 
-      // Stop polling jika sudah selesai
-      if (progress.status == DownloadStatus.done ||
-          progress.status == DownloadStatus.error ||
-          progress.status == DownloadStatus.skipped) {
-        debugPrint('[DownloadNotifier.Poll] Terminal status reached — stopping poll');
+      // Stop polling hanya jika kondisi terminal yang SESUNGGUHNYA tercapai:
+      final isSingleDone = progress.totalSongs <= 1 &&
+          (progress.status == DownloadStatus.done ||
+              progress.status == DownloadStatus.skipped);
+      final isPlaylistDone = progress.totalSongs > 1 &&
+          progress.currentSongIndex >= progress.totalSongs &&
+          (progress.status == DownloadStatus.done ||
+              progress.status == DownloadStatus.skipped);
+      final isError = progress.status == DownloadStatus.error;
+
+      if (isSingleDone || isPlaylistDone || isError) {
+        debugPrint('[DownloadNotifier.Poll] Terminal status reached (singleDone=$isSingleDone, playlistDone=$isPlaylistDone, error=$isError) — stopping poll');
         _stopPolling();
       }
     });
